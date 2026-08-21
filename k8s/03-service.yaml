@@ -1,0 +1,15 @@
+# ClusterIP only. This cluster has no ingress controller, so exposure
+# happens by pointing a Cloudflare Tunnel hostname at this Service —
+# never by adding an Ingress, which would do nothing at all.
+apiVersion: v1
+kind: Service
+metadata:
+  name: k3s-dash
+  namespace: k3s-dash
+spec:
+  selector:
+    app: k3s-dash
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

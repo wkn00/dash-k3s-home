@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k3s-dash
+  namespace: k3s-dash
+  labels:
+    app: k3s-dash
+spec:
+  # Must stay at 1: the two hours of history live in this pod's memory,
+  # so a second replica would serve a different chart depending on which
+  # pod answered the request.
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k3s-dash
+  template:
+    metadata:
+      labels:
+        app: k3s-dash
+    spec:
+      serviceAccountName: k3s-dash
+      # ghcr.io/wkn00 packages are private — every namespace in this
+      # cluster carries this secret.
+      imagePullSecrets:
+        - name: ghcr-creds
+      containers:
+        - name: k3s-dash
+          image: ghcr.io/wkn00/k3s-dash:0.1.1
+          args: ["server", "--addr=:8080"]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          ports:
+            - containerPort: 8080
+              name: http
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 2
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests: { cpu: 20m, memory: 48Mi }
+            limits: { memory: 192Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 65532
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }

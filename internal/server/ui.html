@@ -37,7 +37,7 @@
       --border:         rgba(255, 255, 255, 0.10);
       --accent:         #3987e5;
       --accent-soft:    #1c5cab;
-      --track:          #184f95;
+      --track:          #0d366b;
     }
   }
   :root[data-theme="dark"] {
@@ -51,7 +51,7 @@
     --border:         rgba(255, 255, 255, 0.10);
     --accent:         #3987e5;
     --accent-soft:    #1c5cab;
-    --track:          #184f95;
+    --track:          #0d366b;
   }
 
   * { box-sizing: border-box; }
@@ -178,10 +178,14 @@ function fmtUptime(s) {
 }
 
 // Severity thresholds live in one place so colour and wording never drift.
+// The comparison uses the *displayed* (rounded) value: a disk at 79.6%
+// renders as "80%", and a card that reads 80% with no warning beside it
+// looks broken to anyone who knows the threshold is 80.
 function level(v, warn, bad) {
   if (!has(v)) return "";
-  if (v >= bad) return "critical";
-  if (v >= warn) return "warning";
+  const shown = Math.round(v);
+  if (shown >= bad) return "critical";
+  if (shown >= warn) return "warning";
   return "";
 }
 
