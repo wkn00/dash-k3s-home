@@ -1,1 +1,417 @@
-<!doctype html><meta charset="utf-8"><title>k3s-dash</title><p>loading…</p>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>k3s cluster</title>
+<style>
+  /* Roles, not raw hex, so light/dark swap in one place.
+     Status colours are the fixed status palette and are never themed:
+     warning is deliberately sub-3:1 on the light surface, which is why
+     every severity on this page ships a word as well as a colour. */
+  :root {
+    color-scheme: light;
+    --plane:          #f9f9f7;
+    --surface-1:      #fcfcfb;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --grid:           #e1e0d9;
+    --border:         rgba(11, 11, 11, 0.10);
+    --accent:         #2a78d6;
+    --accent-soft:    #86b6ef;
+    --track:          #cde2fb;
+    --good:           #0ca30c;
+    --warning:        #fab219;
+    --critical:       #d03b3b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --plane:          #0d0d0d;
+      --surface-1:      #1a1a19;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --grid:           #2c2c2a;
+      --border:         rgba(255, 255, 255, 0.10);
+      --accent:         #3987e5;
+      --accent-soft:    #1c5cab;
+      --track:          #184f95;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --plane:          #0d0d0d;
+    --surface-1:      #1a1a19;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --grid:           #2c2c2a;
+    --border:         rgba(255, 255, 255, 0.10);
+    --accent:         #3987e5;
+    --accent-soft:    #1c5cab;
+    --track:          #184f95;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--plane);
+    color: var(--text-primary);
+    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 20px 20px 12px; }
+  h1 { font-size: 17px; margin: 0; letter-spacing: -0.01em; font-weight: 600; }
+  h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--text-muted); margin: 0 0 8px; font-weight: 600;
+  }
+  .muted { color: var(--text-secondary); font-size: 12px; }
+  main { padding: 0 20px 40px; display: grid; gap: 20px; transition: opacity .2s ease; }
+  /* Refetch failure holds the previous render rather than flashing a
+     skeleton — no layout jump, and the numbers stay readable. */
+  main.stale { opacity: .55; }
+
+  .banner {
+    display: none; padding: 9px 12px; border-radius: 8px; font-size: 13px;
+    border: 1px solid var(--warning); background: var(--surface-1);
+    color: var(--text-primary);
+  }
+  .banner.on { display: block; }
+  .banner b { color: var(--text-primary); }
+
+  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 14px 16px;
+  }
+  .card.down { border-color: var(--critical); }
+  .card h2 { font-size: 15px; margin: 0 0 3px; display: flex; align-items: center; gap: 8px; font-weight: 600; }
+
+  .pill { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; font-weight: 500; }
+  .pill.good { color: var(--good); }
+  .pill.critical { color: var(--critical); }
+  .pill.plain { color: var(--text-muted); }
+
+  .metric { display: grid; grid-template-columns: 58px 1fr auto; gap: 10px; align-items: center; margin-top: 10px; }
+  .metric .label { font-size: 12px; color: var(--text-secondary); }
+  .metric .readout { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
+  /* Proportional figures: tabular-nums makes a standalone value look loose. */
+  .metric .value { font-size: 13px; color: var(--text-primary); }
+  /* Severity is carried by a word plus the colour, never the colour alone,
+     and never by recolouring the value itself. */
+  .sev { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; padding: 1px 5px; border-radius: 4px; border: 1px solid currentColor; }
+  .sev.warning { color: var(--warning); }
+  .sev.critical { color: var(--critical); }
+
+  .meter { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+  .meter > i { display: block; height: 100%; background: var(--accent); }
+  .meter > i.warning { background: var(--warning); }
+  .meter > i.critical { background: var(--critical); }
+
+  .wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
+  th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--grid); font-size: 13px; }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 600; }
+  tr:last-child td { border-bottom: none; }
+  /* Columns of numbers align vertically, so these do get tabular figures. */
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.state { white-space: nowrap; }
+
+  ul.events { list-style: none; margin: 0; padding: 0; }
+  ul.events li { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; margin-bottom: 8px; }
+  ul.events li .msg { color: var(--text-secondary); font-size: 12px; }
+  .empty { color: var(--text-muted); font-size: 13px; padding: 10px 2px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>k3s cluster</h1>
+  <span class="muted" id="stamp">connecting…</span>
+</header>
+<main id="main">
+  <div class="banner" id="degraded"></div>
+  <section><div class="cards" id="nodes"></div></section>
+  <section>
+    <h3>Workloads</h3>
+    <div class="wrap"><table>
+      <thead><tr>
+        <th>Namespace</th><th>Name</th><th>Kind</th>
+        <th class="num">Ready</th><th class="num">Restarts</th><th>State</th>
+      </tr></thead>
+      <tbody id="workloads"></tbody>
+    </table></div>
+  </section>
+  <section>
+    <h3>Warnings, last hour</h3>
+    <ul class="events" id="events"></ul>
+  </section>
+</main>
+<script>
+const SVGNS = "http://www.w3.org/2000/svg";
+
+function el(tag, cls, text) {
+  const n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+
+const has = v => v !== null && v !== undefined;
+
+function fmtPct(v)  { return has(v) ? v.toFixed(0) + "%" : "—"; }
+function fmtTemp(v) { return has(v) ? v.toFixed(0) + "°C" : "—"; }
+
+function fmtBytes(v) {
+  if (!has(v)) return "—";
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+  return v.toFixed(v >= 10 || i === 0 ? 0 : 1) + " " + units[i];
+}
+
+function fmtUptime(s) {
+  if (!has(s)) return "—";
+  const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600);
+  return d > 0 ? d + "d " + h + "h" : h + "h " + Math.floor((s % 3600) / 60) + "m";
+}
+
+// Severity thresholds live in one place so colour and wording never drift.
+function level(v, warn, bad) {
+  if (!has(v)) return "";
+  if (v >= bad) return "critical";
+  if (v >= warn) return "warning";
+  return "";
+}
+
+// The sparkline is the trend channel of a stat tile: the line recedes in a
+// de-emphasis step and the current reading is the accent dot, so the eye
+// lands on "now" and reads the history as context. Nulls are failed
+// samples, so the line breaks rather than drawing a straight segment
+// across a period nothing was known about.
+function sparkline(values, label, unit, opts) {
+  const w = 120, h = 26, pad = 3;
+  const svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("viewBox", "0 0 " + w + " " + h);
+  svg.setAttribute("width", w);
+  svg.setAttribute("height", h);
+  svg.setAttribute("role", "img");
+
+  const real = values.filter(has);
+  const title = document.createElementNS(SVGNS, "title");
+  title.textContent = real.length < 2
+    ? label + ": no history yet"
+    : label + " over the last 2h: low " + Math.min(...real).toFixed(0) + unit +
+      ", high " + Math.max(...real).toFixed(0) + unit;
+  svg.appendChild(title);
+  svg.setAttribute("aria-label", title.textContent);
+  if (real.length < 2) return svg;
+
+  let lo = opts && has(opts.min) ? opts.min : Math.min(...real);
+  let hi = opts && has(opts.max) ? opts.max : Math.max(...real);
+  if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
+
+  const x = i => pad + (i / Math.max(values.length - 1, 1)) * (w - 2 * pad);
+  const y = v => h - pad - ((v - lo) / (hi - lo)) * (h - 2 * pad);
+
+  let run = [];
+  const flush = () => {
+    if (run.length >= 2) {
+      const path = document.createElementNS(SVGNS, "path");
+      path.setAttribute("d", "M" + run.join(" L"));
+      path.setAttribute("fill", "none");
+      path.setAttribute("stroke", "var(--accent-soft)");
+      path.setAttribute("stroke-width", "2");
+      path.setAttribute("stroke-linejoin", "round");
+      path.setAttribute("stroke-linecap", "round");
+      svg.appendChild(path);
+    }
+    run = [];
+  };
+  let lastIdx = -1;
+  values.forEach((v, i) => {
+    if (!has(v)) { flush(); return; }
+    lastIdx = i;
+    run.push(x(i).toFixed(1) + "," + y(v).toFixed(1));
+  });
+  flush();
+
+  if (lastIdx >= 0) {
+    const dot = document.createElementNS(SVGNS, "circle");
+    dot.setAttribute("cx", x(lastIdx).toFixed(1));
+    dot.setAttribute("cy", y(values[lastIdx]).toFixed(1));
+    dot.setAttribute("r", "2.5");
+    dot.setAttribute("fill", "var(--accent)");
+    svg.appendChild(dot);
+  }
+  return svg;
+}
+
+function readout(valueText, severity, word) {
+  const box = el("div", "readout");
+  box.appendChild(el("span", "value", valueText));
+  if (severity) box.appendChild(el("span", "sev " + severity, word || severity));
+  return box;
+}
+
+function metricRow(label, valueText, severity, word, mid) {
+  const row = el("div", "metric");
+  row.appendChild(el("span", "label", label));
+  const cell = el("div");
+  if (mid) cell.appendChild(mid);
+  row.appendChild(cell);
+  row.appendChild(readout(valueText, severity, word));
+  return row;
+}
+
+// Meter: the unfilled track is a lighter step of the fill's own ramp, so
+// the bar reads as one object rather than a fill on neutral grey.
+function meter(pct, severity) {
+  const bar = el("div", "meter");
+  const fill = el("i", severity);
+  fill.style.width = Math.max(0, Math.min(100, pct || 0)) + "%";
+  bar.appendChild(fill);
+  return bar;
+}
+
+function batteryReadout(b) {
+  if (!b || (!has(b.percent) && !has(b.acOnline))) return { text: "—", sev: "", word: "" };
+  if (!has(b.percent)) return { text: b.acOnline ? "on AC" : "on battery", sev: "", word: "" };
+  const onBattery = b.status === "Discharging";
+  const text = b.percent + "%" + (onBattery ? " · on battery" : (b.acOnline ? " · AC" : ""));
+  if (onBattery && b.percent < 25) return { text, sev: "critical", word: "low" };
+  if (onBattery) return { text, sev: "warning", word: "unplugged" };
+  return { text, sev: "", word: "" };
+}
+
+function nodeCard(n) {
+  const card = el("div", "card" + (n.ready ? "" : " down"));
+
+  const title = el("h2");
+  title.appendChild(el("span", null, n.name));
+  title.appendChild(el("span", "pill " + (n.ready ? "good" : "critical"), n.ready ? "Ready" : "NotReady"));
+  if (n.controlPlane) title.appendChild(el("span", "pill plain", "control-plane"));
+  card.appendChild(title);
+
+  const sub = [fmtUptime(n.uptimeSeconds) + " up", n.podCount + " pods"];
+  if (n.kubeletVersion) sub.push(n.kubeletVersion);
+  card.appendChild(el("div", "muted", sub.join(" · ")));
+
+  const cpuSev = level(n.cpuPercent, 75, 90);
+  card.appendChild(metricRow("CPU", fmtPct(n.cpuPercent), cpuSev, cpuSev === "critical" ? "saturated" : "busy",
+    sparkline(n.series.cpuPercent, "CPU", "%", { min: 0, max: 100 })));
+
+  const memSev = level(n.memPercent, 80, 92);
+  card.appendChild(metricRow("Memory", fmtPct(n.memPercent), memSev, memSev === "critical" ? "near limit" : "high",
+    sparkline(n.series.memPercent, "Memory", "%", { min: 0, max: 100 })));
+
+  const diskSev = level(n.diskPercent, 80, 90);
+  const diskText = has(n.diskPercent) ? fmtPct(n.diskPercent) + " · " + fmtBytes(n.diskUsedBytes) : "—";
+  card.appendChild(metricRow("Disk", diskText, diskSev, diskSev === "critical" ? "almost full" : "filling",
+    meter(n.diskPercent, diskSev)));
+
+  const tempSev = level(n.tempC, 75, 85);
+  card.appendChild(metricRow("Temp", fmtTemp(n.tempC), tempSev, tempSev === "critical" ? "overheating" : "hot",
+    sparkline(n.series.tempC, "Temperature", "°C")));
+
+  const bat = batteryReadout(n.battery);
+  card.appendChild(metricRow("Battery", bat.text, bat.sev, bat.word,
+    sparkline(n.series.batteryPercent, "Battery", "%", { min: 0, max: 100 })));
+
+  return card;
+}
+
+function render(s) {
+  document.getElementById("nodes").replaceChildren(...s.nodes.map(nodeCard));
+
+  const tbody = document.getElementById("workloads");
+  if (s.workloads.length) {
+    tbody.replaceChildren(...s.workloads.map(w => {
+      const tr = el("tr");
+      tr.appendChild(el("td", null, w.namespace));
+      tr.appendChild(el("td", null, w.name));
+      tr.appendChild(el("td", null, w.kind));
+      tr.appendChild(el("td", "num", w.ready + "/" + w.desired));
+      tr.appendChild(el("td", "num", String(w.restarts)));
+      const state = el("td", "state");
+      // The table is the WCAG-clean twin: state is a word first.
+      state.appendChild(el("span", "pill " + (w.healthy ? "good" : "critical"),
+        w.healthy ? "ok" : "degraded"));
+      tr.appendChild(state);
+      return tr;
+    }));
+  } else {
+    const tr = el("tr");
+    const td = el("td", "empty", "No workloads reported.");
+    td.colSpan = 6;
+    tr.appendChild(td);
+    tbody.replaceChildren(tr);
+  }
+
+  const events = document.getElementById("events");
+  if (s.events.length) {
+    events.replaceChildren(...s.events.map(e => {
+      const li = el("li");
+      const head = el("div");
+      head.appendChild(el("strong", null, e.reason));
+      head.appendChild(el("span", "muted", "  " + e.namespace + "/" + e.object +
+        (e.count > 1 ? "  ×" + e.count : "")));
+      li.appendChild(head);
+      li.appendChild(el("div", "msg", e.message));
+      return li;
+    }));
+  } else {
+    events.replaceChildren(el("li", "empty", "No warnings in the last hour."));
+  }
+
+  const banner = document.getElementById("degraded");
+  const notes = [];
+  if (s.meta.degraded && s.meta.degraded.length) {
+    notes.push("Not reporting: " + s.meta.degraded.join(", ") + ".");
+  }
+
+  const sampled = new Date(s.meta.sampledAt);
+  const age = Math.round((Date.now() - sampled.getTime()) / 1000);
+  const first = isNaN(age) || String(s.meta.sampledAt).startsWith("0001");
+  document.getElementById("stamp").textContent = first
+    ? "waiting for the first sample…"
+    : "updated " + (age < 60 ? age + "s" : Math.round(age / 60) + "m") + " ago";
+
+  // A snapshot older than four intervals means the sample loop is stuck or
+  // the API server is unreachable. What is on screen is then history, not
+  // status, and the page has to say so.
+  const maxAge = 4 * (s.meta.sampleIntervalSeconds || 15);
+  if (!first && age > maxAge) {
+    notes.push("Stale: last successful sample was " +
+      (age < 120 ? age + "s" : Math.round(age / 60) + "m") +
+      " ago, so these numbers may no longer be current.");
+  }
+
+  if (notes.length) {
+    banner.textContent = notes.join(" ");
+    banner.classList.add("on");
+  } else {
+    banner.classList.remove("on");
+  }
+}
+
+async function tick() {
+  const main = document.getElementById("main");
+  try {
+    const r = await fetch("/api/state", { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    render(await r.json());
+    main.classList.remove("stale");
+  } catch (err) {
+    // Hold the previous render rather than blanking the page.
+    main.classList.add("stale");
+    document.getElementById("stamp").textContent = "dashboard unreachable — retrying";
+  }
+}
+
+tick();
+setInterval(tick, 5000);
+</script>
+</body>
+</html>
