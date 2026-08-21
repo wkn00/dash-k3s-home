@@ -19,8 +19,8 @@ Checked against the live cluster, because it changes the manifests.
 ## Deploy
 
 ```bash
-docker build -t ghcr.io/wkn00/k3s-dash:0.1.1 .
-docker push ghcr.io/wkn00/k3s-dash:0.1.1
+docker build -t ghcr.io/wkn00/k3s-dash:0.1.2 .
+docker push ghcr.io/wkn00/k3s-dash:0.1.2
 
 kubectl apply -f k8s/00-namespace.yaml
 
