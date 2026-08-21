@@ -68,6 +68,10 @@
     color: var(--text-muted); margin: 0 0 8px; font-weight: 600;
   }
   .muted { color: var(--text-secondary); font-size: 12px; }
+  /* The spec is context rather than status, so it sits a step further
+     back than .muted, and wraps instead of widening the card when a
+     distro ships a long os-release string. */
+  .spec { color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
   main { padding: 0 20px 40px; display: grid; gap: 20px; transition: opacity .2s ease; }
   /* Refetch failure holds the previous render rather than flashing a
      skeleton — no layout jump, and the numbers stay readable. */
@@ -289,6 +293,24 @@ function batteryReadout(b) {
   return { text, sev: "", word: "" };
 }
 
+// What the node *is*, as opposed to what it is doing. These values do not
+// move between samples, so they belong under the title as context rather
+// than in a metric row with a sparkline. Unknown parts are dropped rather
+// than shown as em dashes: on a spec line a row of dashes tells you less
+// than a shorter line that only lists what is actually known. The two
+// lines have separate sources — capacities and platform come from the API
+// server, the CPU model from the node's own agent — so either can be
+// present without the other.
+function specLines(n) {
+  const hardware = [];
+  if (n.cpuModel) hardware.push(n.cpuModel);
+  if (n.cpuCores) hardware.push(n.cpuCores + (n.cpuCores === 1 ? " core" : " cores"));
+  if (n.memTotalBytes) hardware.push(fmtBytes(n.memTotalBytes) + " RAM");
+  if (n.diskTotalBytes) hardware.push(fmtBytes(n.diskTotalBytes) + " disk");
+  const platform = [n.osImage, n.kernelVersion, n.architecture].filter(Boolean);
+  return [hardware, platform].filter(parts => parts.length).map(parts => parts.join(" \u00b7 "));
+}
+
 function nodeCard(n) {
   const card = el("div", "card" + (n.ready ? "" : " down"));
 
@@ -301,6 +323,8 @@ function nodeCard(n) {
   const sub = [fmtUptime(n.uptimeSeconds) + " up", n.podCount + " pods"];
   if (n.kubeletVersion) sub.push(n.kubeletVersion);
   card.appendChild(el("div", "muted", sub.join(" · ")));
+
+  for (const line of specLines(n)) card.appendChild(el("div", "spec", line));
 
   const cpuSev = level(n.cpuPercent, 75, 90);
   card.appendChild(metricRow("CPU", fmtPct(n.cpuPercent), cpuSev, cpuSev === "critical" ? "saturated" : "busy",

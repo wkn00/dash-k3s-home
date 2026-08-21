@@ -1,8 +1,11 @@
 package server
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/wkn00/k3s-dash/internal/state"
 )
 
 // The dependency-free contract for the page. These are the mistakes worth
@@ -54,6 +57,43 @@ func TestDarkModeIsSelectedForBothScopes(t *testing.T) {
 	for _, scope := range []string{`:root:where(:not([data-theme="light"]))`, `:root[data-theme="dark"]`} {
 		if !strings.Contains(page, scope) {
 			t.Errorf("page is missing the dark-mode scope %s", scope)
+		}
+	}
+}
+
+// The spec line names the hardware behind a node — model, cores, RAM,
+// disk, OS. The key names come from state.Node's own JSON tags rather
+// than from string literals here, so renaming a tag in Go and forgetting
+// the page fails this test instead of silently rendering "undefined".
+func TestPageRendersTheHardwareSpec(t *testing.T) {
+	blob, err := json.Marshal(state.Node{})
+	if err != nil {
+		t.Fatalf("marshal state.Node: %v", err)
+	}
+	var keys map[string]any
+	if err := json.Unmarshal(blob, &keys); err != nil {
+		t.Fatalf("unmarshal state.Node: %v", err)
+	}
+
+	page := string(uiHTML)
+	for _, field := range []string{
+		"cpuModel", "cpuCores", "memTotalBytes", "diskTotalBytes",
+		"osImage", "kernelVersion", "architecture",
+	} {
+		if _, ok := keys[field]; !ok {
+			t.Errorf("state.Node no longer marshals %q — the page cannot render it", field)
+			continue
+		}
+		if !strings.Contains(page, "."+field) {
+			t.Errorf("page never reads n.%s, so the spec line is missing it", field)
+		}
+	}
+
+	// Cores and bytes are unitless numbers in the payload; the card has to
+	// say which is which.
+	for _, unit := range []string{"cores", "RAM", "disk"} {
+		if !strings.Contains(page, unit) {
+			t.Errorf("page is missing the spec unit wording %q", unit)
 		}
 	}
 }

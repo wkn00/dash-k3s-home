@@ -29,7 +29,8 @@ func routes(t *testing.T, bodies map[string]string) *Client {
 const nodeListJSON = `{"items":[
  {"metadata":{"name":"wk","labels":{"node-role.kubernetes.io/control-plane":"true"},"creationTimestamp":"2026-06-22T16:20:00Z"},
   "status":{"conditions":[{"type":"MemoryPressure","status":"False"},{"type":"Ready","status":"True"}],
-            "nodeInfo":{"kubeletVersion":"v1.35.5+k3s1","osImage":"Ubuntu 26.04 LTS"},
+            "nodeInfo":{"kubeletVersion":"v1.35.5+k3s1","osImage":"Ubuntu 26.04 LTS",
+                        "kernelVersion":"6.14.0-27-generic","architecture":"amd64"},
             "capacity":{"cpu":"8","memory":"16308880Ki"}}},
  {"metadata":{"name":"wk2","labels":{},"creationTimestamp":"2026-06-22T16:21:00Z"},
   "status":{"conditions":[{"type":"Ready","status":"False"}],
@@ -60,6 +61,17 @@ func TestNodes(t *testing.T) {
 	}
 	if got[0].MemoryCapacityBytes != 16308880*1024 {
 		t.Errorf("wk MemoryCapacityBytes = %v, want %v", got[0].MemoryCapacityBytes, 16308880*1024)
+	}
+	if got[0].KernelVersion != "6.14.0-27-generic" {
+		t.Errorf("wk KernelVersion = %q, want %q", got[0].KernelVersion, "6.14.0-27-generic")
+	}
+	if got[0].Architecture != "amd64" {
+		t.Errorf("wk Architecture = %q, want %q", got[0].Architecture, "amd64")
+	}
+	// wk2 omits both, as an older kubelet or a trimmed status would.
+	if got[1].KernelVersion != "" || got[1].Architecture != "" {
+		t.Errorf("wk2 = %q/%q, want both empty when nodeInfo omits them",
+			got[1].KernelVersion, got[1].Architecture)
 	}
 }
 

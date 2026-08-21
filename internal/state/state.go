@@ -27,6 +27,9 @@ type Node struct {
 	ControlPlane   bool                  `json:"controlPlane"`
 	KubeletVersion string                `json:"kubeletVersion"`
 	OSImage        string                `json:"osImage"`
+	KernelVersion  string                `json:"kernelVersion"`
+	Architecture   string                `json:"architecture"`
+	CPUModel       *string               `json:"cpuModel"`
 	UptimeSeconds  *float64              `json:"uptimeSeconds"`
 	Load1          *float64              `json:"load1"`
 	CPUPercent     *float64              `json:"cpuPercent"`
@@ -112,6 +115,8 @@ func Assemble(raw collect.Raw, buffers *ring.Set, interval time.Duration) Snapsh
 			ControlPlane:   kn.ControlPlane,
 			KubeletVersion: kn.KubeletVersion,
 			OSImage:        kn.OSImage,
+			KernelVersion:  kn.KernelVersion,
+			Architecture:   kn.Architecture,
 			CPUCores:       kn.CPUCapacityCores,
 			MemTotalBytes:  kn.MemoryCapacityBytes,
 			PodCount:       podsPerNode[kn.Name],
@@ -132,6 +137,7 @@ func Assemble(raw collect.Raw, buffers *ring.Set, interval time.Duration) Snapsh
 			n.Battery = snapshot.Battery
 			n.UptimeSeconds = snapshot.UptimeSeconds
 			n.Load1 = snapshot.Load1
+			n.CPUModel = snapshot.CPUModel
 		}
 
 		var batteryPercent *float64

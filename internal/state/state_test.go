@@ -22,7 +22,8 @@ func baseRaw() collect.Raw {
 	return collect.Raw{
 		At: time.Date(2026, 8, 21, 6, 0, 0, 0, time.UTC),
 		Nodes: []kube.Node{
-			{Name: "wk", Ready: true, ControlPlane: true, CPUCapacityCores: 8, MemoryCapacityBytes: 16e9},
+			{Name: "wk", Ready: true, ControlPlane: true, CPUCapacityCores: 8, MemoryCapacityBytes: 16e9,
+				KernelVersion: "6.14.0-27-generic", Architecture: "amd64"},
 			{Name: "wk1", Ready: true, CPUCapacityCores: 4, MemoryCapacityBytes: 8e9},
 		},
 		Pods: []kube.Pod{
@@ -45,7 +46,7 @@ func baseRaw() collect.Raw {
 		},
 		FS: map[string]kube.Filesystem{"wk": {UsedBytes: 250, CapacityBytes: 1000}},
 		HW: map[string]hw.Snapshot{
-			"wk": {Node: "wk", TempC: &temp, Load1: f(0.96),
+			"wk": {Node: "wk", TempC: &temp, Load1: f(0.96), CPUModel: strp("Core i7-8650U"),
 				Battery: &hw.Battery{Percent: &pct, Status: strp("Discharging"), ACOnline: boolp(false)}},
 		},
 		Degraded: []string{},
@@ -179,5 +180,38 @@ func TestSnapshotMarshalsWithStableKeys(t *testing.T) {
 		if !strings.Contains(string(blob), want) {
 			t.Errorf("JSON missing %s", want)
 		}
+	}
+}
+
+// The spec a card prints comes from two sources, and the card has to
+// survive either one being absent: kernel and architecture come from the
+// API server, the CPU model comes from the node's own agent.
+func TestAssembleCarriesHardwareSpec(t *testing.T) {
+	got := Assemble(baseRaw(), ring.NewSet(10), 15*time.Second)
+
+	byName := map[string]Node{}
+	for _, n := range got.Nodes {
+		byName[n.Name] = n
+	}
+	wk := byName["wk"]
+	if wk.CPUModel == nil || *wk.CPUModel != "Core i7-8650U" {
+		t.Errorf("wk CPUModel = %v, want %q", wk.CPUModel, "Core i7-8650U")
+	}
+	if wk.KernelVersion != "6.14.0-27-generic" {
+		t.Errorf("wk KernelVersion = %q, want %q", wk.KernelVersion, "6.14.0-27-generic")
+	}
+	if wk.Architecture != "amd64" {
+		t.Errorf("wk Architecture = %q, want %q", wk.Architecture, "amd64")
+	}
+
+	// wk1 has no agent reporting, so it has no CPU model — but the
+	// capacities the API server supplies must still be there, because a
+	// down agent must not blank the rest of the spec line.
+	wk1 := byName["wk1"]
+	if wk1.CPUModel != nil {
+		t.Errorf("wk1 CPUModel = %v, want nil — no agent reported for this node", *wk1.CPUModel)
+	}
+	if wk1.CPUCores != 4 || wk1.MemTotalBytes != 8e9 {
+		t.Errorf("wk1 cores/mem = %v/%v, want 4/8e9", wk1.CPUCores, wk1.MemTotalBytes)
 	}
 }

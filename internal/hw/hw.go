@@ -20,6 +20,7 @@ type Battery struct {
 
 type Snapshot struct {
 	Node          string   `json:"node"`
+	CPUModel      *string  `json:"cpuModel"`
 	UptimeSeconds *float64 `json:"uptimeSeconds"`
 	Load1         *float64 `json:"load1"`
 	Load5         *float64 `json:"load5"`
@@ -37,6 +38,7 @@ func Read(root, node string) Snapshot {
 	s.UptimeSeconds = ReadUptime(root)
 	s.TempC = ReadTempC(root)
 	s.Battery = ReadBattery(root)
+	s.CPUModel = ReadCPUModel(root)
 	return s
 }
 
@@ -102,6 +104,70 @@ func ReadUptime(root string) *float64 {
 		return nil
 	}
 	return &v
+}
+
+// ReadCPUModel names the processor from /proc/cpuinfo. It prefers the
+// x86 "model name" key and falls back to "Model", which is the only one
+// ARM boards populate — a Pi has no "model name" line at all. The match
+// is case-sensitive on purpose: x86 also carries a lowercase "model" key
+// whose value is the numeric model ID.
+func ReadCPUModel(root string) *string {
+	text, ok := readTrimmed(filepath.Join(root, "proc", "cpuinfo"))
+	if !ok {
+		return nil
+	}
+	var fallback string
+	for _, line := range strings.Split(text, "\n") {
+		key, value, found := strings.Cut(line, ":")
+		if !found {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		switch strings.TrimSpace(key) {
+		case "model name":
+			if tidy := tidyCPUModel(value); tidy != "" {
+				return &tidy
+			}
+		case "Model":
+			if fallback == "" {
+				fallback = value
+			}
+		}
+	}
+	if tidy := tidyCPUModel(fallback); tidy != "" {
+		return &tidy
+	}
+	return nil
+}
+
+// tidyCPUModel strips the parts of a vendor string that carry no
+// information: the trademark marks, the clock speed (which is the
+// nominal one and not what the chip is doing), the bundled-GPU suffix,
+// and the vendor and "CPU" tokens. What is left is the part someone
+// would say out loud — "Core i7-8650U" — which is what has to fit on one
+// line of a card.
+func tidyCPUModel(model string) string {
+	for _, mark := range []string{"(R)", "(r)", "(TM)", "(tm)", "\u00ae", "\u2122"} {
+		model = strings.ReplaceAll(model, mark, "")
+	}
+	if base, _, found := strings.Cut(model, " @ "); found {
+		model = base
+	}
+	if base, _, found := strings.Cut(model, " with "); found {
+		model = base
+	}
+	noise := map[string]bool{"Intel": true, "AMD": true, "CPU": true, "Processor": true}
+	kept := make([]string, 0, len(strings.Fields(model)))
+	for _, field := range strings.Fields(model) {
+		if noise[field] {
+			continue
+		}
+		kept = append(kept, field)
+	}
+	return strings.Join(kept, " ")
 }
 
 // ReadTempC prefers the CPU package sensor: on these laptops acpitz

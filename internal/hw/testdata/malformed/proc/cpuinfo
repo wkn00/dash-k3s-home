@@ -1,0 +1,3 @@
+processor	: 0
+BogoMIPS	: 108.00
+Features	: fp asimd

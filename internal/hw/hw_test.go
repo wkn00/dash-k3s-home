@@ -131,3 +131,44 @@ func TestReadNeverPanicsAndKeepsGoodFields(t *testing.T) {
 		}
 	})
 }
+
+func eqS(t *testing.T, name string, got, want *string) {
+	t.Helper()
+	switch {
+	case got == nil && want == nil:
+	case got == nil || want == nil:
+		t.Errorf("%s = %v, want %v", name, fmtS(got), fmtS(want))
+	case *got != *want:
+		t.Errorf("%s = %q, want %q", name, *got, *want)
+	}
+}
+
+func fmtS(p *string) any {
+	if p == nil {
+		return "nil"
+	}
+	return *p
+}
+
+func TestReadCPUModel(t *testing.T) {
+	tests := []struct {
+		fixture string
+		want    *string
+		why     string
+	}{
+		{"charging", strPtr("Core i7-8650U"), "the Intel vendor decoration and clock suffix are noise, not identity"},
+		{"discharging", strPtr("Ryzen 7 5800H"), "the AMD prefix and the graphics suffix are noise too"},
+		{"nobattery", strPtr("Raspberry Pi 4 Model B Rev 1.4"), "ARM boards have no model name line, only Model"},
+		{"malformed", nil, "neither key present, so there is no model to report"},
+		{"empty", nil, "nothing mounted"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.fixture, func(t *testing.T) {
+			got := ReadCPUModel(filepath.Join("testdata", tc.fixture))
+			eqS(t, "ReadCPUModel", got, tc.want)
+			if t.Failed() {
+				t.Logf("expectation: %s", tc.why)
+			}
+		})
+	}
+}

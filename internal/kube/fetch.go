@@ -24,6 +24,8 @@ func (c *Client) Nodes(ctx context.Context) ([]Node, error) {
 				NodeInfo struct {
 					KubeletVersion string `json:"kubeletVersion"`
 					OSImage        string `json:"osImage"`
+					KernelVersion  string `json:"kernelVersion"`
+					Architecture   string `json:"architecture"`
 				} `json:"nodeInfo"`
 				Capacity struct {
 					CPU    string `json:"cpu"`
@@ -41,6 +43,8 @@ func (c *Client) Nodes(ctx context.Context) ([]Node, error) {
 			Name:           item.Metadata.Name,
 			KubeletVersion: item.Status.NodeInfo.KubeletVersion,
 			OSImage:        item.Status.NodeInfo.OSImage,
+			KernelVersion:  item.Status.NodeInfo.KernelVersion,
+			Architecture:   item.Status.NodeInfo.Architecture,
 			CreatedAt:      item.Metadata.CreationTimestamp,
 		}
 		_, n.ControlPlane = item.Metadata.Labels["node-role.kubernetes.io/control-plane"]

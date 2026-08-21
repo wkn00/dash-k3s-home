@@ -9,6 +9,8 @@ type Node struct {
 	ControlPlane        bool
 	KubeletVersion      string
 	OSImage             string
+	KernelVersion       string
+	Architecture        string
 	CreatedAt           time.Time
 	CPUCapacityCores    float64
 	MemoryCapacityBytes float64
