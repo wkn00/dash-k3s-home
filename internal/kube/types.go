@@ -11,6 +11,8 @@ type Node struct {
 	OSImage             string
 	KernelVersion       string
 	Architecture        string
+	InternalIP          string
+	Annotations         map[string]string
 	CreatedAt           time.Time
 	CPUCapacityCores    float64
 	MemoryCapacityBytes float64

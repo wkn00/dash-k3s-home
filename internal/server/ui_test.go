@@ -97,3 +97,105 @@ func TestPageRendersTheHardwareSpec(t *testing.T) {
 		}
 	}
 }
+
+// The identity block is the answer to "which box is this?" — the part of
+// the card a person reads before any number on it. As with the spec line,
+// the key names come from state.Node's own JSON tags, so renaming a tag in
+// Go and forgetting the page fails here rather than rendering "undefined".
+func TestPageRendersTheDeviceIdentity(t *testing.T) {
+	keys := marshalledKeys(t, state.Node{})
+	page := string(uiHTML)
+
+	for _, field := range []string{
+		"displayName", "deviceVendor", "deviceModel", "deviceClass",
+		"internalIP", "joinedAt",
+	} {
+		if _, ok := keys[field]; !ok {
+			t.Errorf("state.Node no longer marshals %q — the page cannot render it", field)
+			continue
+		}
+		if !strings.Contains(page, "."+field) {
+			t.Errorf("page never reads n.%s, so the device is less identified than it could be", field)
+		}
+	}
+}
+
+// Every chassis class the agent can report needs a glyph. A class with no
+// entry would silently fall back to the generic box, which is the one
+// outcome that looks like the feature works when it does not.
+func TestEveryChassisClassHasAGlyph(t *testing.T) {
+	page := string(uiHTML)
+	for _, class := range []string{
+		"laptop", "desktop", "mini-pc", "all-in-one", "server",
+		"sbc", "embedded", "tablet", "stick-pc", "vm",
+	} {
+		if !strings.Contains(page, class) {
+			t.Errorf("page has no glyph or wording for chassis class %q", class)
+		}
+	}
+	if !strings.Contains(page, "unidentified device") {
+		t.Error("page is missing the wording for a device with no usable DMI")
+	}
+	// The hint has to name the escape hatch, or an unidentifiable device is
+	// a dead end for whoever is looking at it.
+	if !strings.Contains(page, "k3s-dash/model") {
+		t.Error("page never mentions the annotation that names an unidentified device")
+	}
+}
+
+// The fleet strip is what makes ten devices readable, so the page has to
+// actually consume it.
+func TestPageRendersTheFleetSummary(t *testing.T) {
+	keys := marshalledKeys(t, state.Fleet{})
+	page := string(uiHTML)
+
+	if !strings.Contains(page, `id="fleet"`) {
+		t.Error("page is missing the fleet strip")
+	}
+	for _, field := range []string{
+		"devices", "ready", "onBattery", "pods", "workloadsDegraded",
+		"cpuCores", "memTotalBytes", "cpuPercent", "memPercent",
+		"diskPercent", "hottestNode", "hottestC", "workloadsTotal",
+	} {
+		if _, ok := keys[field]; !ok {
+			t.Errorf("state.Fleet no longer marshals %q — the page cannot render it", field)
+			continue
+		}
+		if !strings.Contains(page, "."+field) {
+			t.Errorf("page never reads fleet.%s", field)
+		}
+	}
+}
+
+// Ten cards do not fit on a screen at the height three cards used, so the
+// page ships two densities and remembers which one was chosen.
+func TestPageOffersADensityToggle(t *testing.T) {
+	page := string(uiHTML)
+	for _, required := range []string{`id="density-compact"`, `id="density-detailed"`, "aria-pressed", "localStorage"} {
+		if !strings.Contains(page, required) {
+			t.Errorf("page is missing %q from the density toggle", required)
+		}
+	}
+	// Storage throws outright in a private window, and a dashboard that
+	// fails to render because it could not remember a layout preference
+	// would be a poor trade.
+	if !strings.Contains(page, "try { localStorage") {
+		t.Error("page reads localStorage without a guard; it throws in a private window")
+	}
+}
+
+// marshalledKeys is the JSON object a value produces, so tests can assert
+// against the tags Go actually emits rather than against string literals
+// that drift.
+func marshalledKeys(t *testing.T, v any) map[string]any {
+	t.Helper()
+	blob, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal %T: %v", v, err)
+	}
+	var keys map[string]any
+	if err := json.Unmarshal(blob, &keys); err != nil {
+		t.Fatalf("unmarshal %T: %v", v, err)
+	}
+	return keys
+}

@@ -9,6 +9,7 @@ type objectMeta struct {
 	Name              string            `json:"name"`
 	Namespace         string            `json:"namespace"`
 	Labels            map[string]string `json:"labels"`
+	Annotations       map[string]string `json:"annotations"`
 	CreationTimestamp time.Time         `json:"creationTimestamp"`
 }
 
@@ -21,6 +22,10 @@ func (c *Client) Nodes(ctx context.Context) ([]Node, error) {
 					Type   string `json:"type"`
 					Status string `json:"status"`
 				} `json:"conditions"`
+				Addresses []struct {
+					Type    string `json:"type"`
+					Address string `json:"address"`
+				} `json:"addresses"`
 				NodeInfo struct {
 					KubeletVersion string `json:"kubeletVersion"`
 					OSImage        string `json:"osImage"`
@@ -45,13 +50,27 @@ func (c *Client) Nodes(ctx context.Context) ([]Node, error) {
 			OSImage:        item.Status.NodeInfo.OSImage,
 			KernelVersion:  item.Status.NodeInfo.KernelVersion,
 			Architecture:   item.Status.NodeInfo.Architecture,
+			Annotations:    item.Metadata.Annotations,
 			CreatedAt:      item.Metadata.CreationTimestamp,
+		}
+		if n.Annotations == nil {
+			// Callers index this to read the display overrides; a nil map
+			// reads fine but a nil map on a struct invites a later write
+			// that panics.
+			n.Annotations = map[string]string{}
 		}
 		_, n.ControlPlane = item.Metadata.Labels["node-role.kubernetes.io/control-plane"]
 		for _, cond := range item.Status.Conditions {
 			// Ready is not reliably the first condition, so scan.
 			if cond.Type == "Ready" {
 				n.Ready = cond.Status == "True"
+			}
+		}
+		for _, addr := range item.Status.Addresses {
+			// Hostname is usually first in the list, so scan for the type
+			// rather than taking addresses[0].
+			if addr.Type == "InternalIP" && n.InternalIP == "" {
+				n.InternalIP = addr.Address
 			}
 		}
 		n.CPUCapacityCores, _ = ParseQuantity(item.Status.Capacity.CPU)

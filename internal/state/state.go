@@ -18,13 +18,25 @@ import (
 // EventWindow is how far back the warnings panel looks.
 const EventWindow = time.Hour
 
-// SeriesMetrics are the sparklines the page draws, in display order.
+// SeriesMetrics are the sparklines a node card draws, in display order.
 var SeriesMetrics = []string{"cpuPercent", "memPercent", "tempC", "batteryPercent"}
+
+// FleetSeriesMetrics are the sparklines the fleet strip draws. Battery is
+// absent on purpose: a fleet battery percentage would be an average across
+// machines that are not all plugged into the same thing. The fleet answers
+// that question with a count of what is unplugged instead.
+var FleetSeriesMetrics = []string{"cpuPercent", "memPercent", "diskPercent", "tempC"}
 
 type Node struct {
 	Name           string                `json:"name"`
+	DisplayName    *string               `json:"displayName"`
 	Ready          bool                  `json:"ready"`
 	ControlPlane   bool                  `json:"controlPlane"`
+	DeviceVendor   *string               `json:"deviceVendor"`
+	DeviceModel    *string               `json:"deviceModel"`
+	DeviceClass    *string               `json:"deviceClass"`
+	InternalIP     string                `json:"internalIP"`
+	JoinedAt       time.Time             `json:"joinedAt"`
 	KubeletVersion string                `json:"kubeletVersion"`
 	OSImage        string                `json:"osImage"`
 	KernelVersion  string                `json:"kernelVersion"`
@@ -73,6 +85,7 @@ type Meta struct {
 
 type Snapshot struct {
 	Nodes     []Node     `json:"nodes"`
+	Fleet     Fleet      `json:"fleet"`
 	Workloads []Workload `json:"workloads"`
 	Events    []Event    `json:"events"`
 	Meta      Meta       `json:"meta"`
@@ -117,6 +130,8 @@ func Assemble(raw collect.Raw, buffers *ring.Set, interval time.Duration) Snapsh
 			OSImage:        kn.OSImage,
 			KernelVersion:  kn.KernelVersion,
 			Architecture:   kn.Architecture,
+			InternalIP:     kn.InternalIP,
+			JoinedAt:       kn.CreatedAt,
 			CPUCores:       kn.CPUCapacityCores,
 			MemTotalBytes:  kn.MemoryCapacityBytes,
 			PodCount:       podsPerNode[kn.Name],
@@ -132,13 +147,16 @@ func Assemble(raw collect.Raw, buffers *ring.Set, interval time.Duration) Snapsh
 			n.DiskUsedBytes, n.DiskTotalBytes = &used, &total
 			n.DiskPercent = ratio(fs.UsedBytes, fs.CapacityBytes)
 		}
+		var agent *hw.Snapshot
 		if snapshot, ok := raw.HW[kn.Name]; ok {
+			agent = &snapshot
 			n.TempC = snapshot.TempC
 			n.Battery = snapshot.Battery
 			n.UptimeSeconds = snapshot.UptimeSeconds
 			n.Load1 = snapshot.Load1
 			n.CPUModel = snapshot.CPUModel
 		}
+		n.DisplayName, n.DeviceVendor, n.DeviceModel, n.DeviceClass = identify(kn, agent)
 
 		var batteryPercent *float64
 		if n.Battery != nil && n.Battery.Percent != nil {
@@ -153,6 +171,10 @@ func Assemble(raw collect.Raw, buffers *ring.Set, interval time.Duration) Snapsh
 
 		snap.Nodes = append(snap.Nodes, n)
 	}
+	// Name order, not trouble order. Sorting by severity needs the warning
+	// and critical thresholds, and those live in the page — duplicating
+	// them here is how the two copies drift apart. The page re-sorts with
+	// the thresholds it already owns.
 	sort.Slice(snap.Nodes, func(i, j int) bool { return snap.Nodes[i].Name < snap.Nodes[j].Name })
 
 	for _, kw := range raw.Workloads {
@@ -183,6 +205,16 @@ func Assemble(raw collect.Raw, buffers *ring.Set, interval time.Duration) Snapsh
 		}
 		return a.Name < b.Name
 	})
+
+	snap.Fleet = summarise(snap.Nodes, snap.Workloads)
+	// The fleet strip draws its own sparklines, so the aggregate needs a
+	// history of its own — recomputing one from the node series would
+	// average percentages the same way summarise refuses to.
+	buffers.Add(fleetKey, "cpuPercent", raw.At, snap.Fleet.CPUPercent)
+	buffers.Add(fleetKey, "memPercent", raw.At, snap.Fleet.MemPercent)
+	buffers.Add(fleetKey, "diskPercent", raw.At, snap.Fleet.DiskPercent)
+	buffers.Add(fleetKey, "tempC", raw.At, snap.Fleet.HottestC)
+	snap.Fleet.Series = buffers.Series(fleetKey, FleetSeriesMetrics)
 
 	cutoff := raw.At.Add(-EventWindow)
 	for _, ev := range raw.Warnings {
