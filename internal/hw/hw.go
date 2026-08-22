@@ -20,6 +20,7 @@ type Battery struct {
 
 type Snapshot struct {
 	Node          string   `json:"node"`
+	Device        *Device  `json:"device"`
 	CPUModel      *string  `json:"cpuModel"`
 	UptimeSeconds *float64 `json:"uptimeSeconds"`
 	Load1         *float64 `json:"load1"`
@@ -39,6 +40,7 @@ func Read(root, node string) Snapshot {
 	s.TempC = ReadTempC(root)
 	s.Battery = ReadBattery(root)
 	s.CPUModel = ReadCPUModel(root)
+	s.Device = ReadDevice(root)
 	return s
 }
 

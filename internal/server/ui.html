@@ -13,6 +13,7 @@
     color-scheme: light;
     --plane:          #f9f9f7;
     --surface-1:      #fcfcfb;
+    --surface-2:      #f2f2ee;
     --text-primary:   #0b0b0b;
     --text-secondary: #52514e;
     --text-muted:     #898781;
@@ -30,6 +31,7 @@
       color-scheme: dark;
       --plane:          #0d0d0d;
       --surface-1:      #1a1a19;
+      --surface-2:      #242422;
       --text-primary:   #ffffff;
       --text-secondary: #c3c2b7;
       --text-muted:     #898781;
@@ -44,6 +46,7 @@
     color-scheme: dark;
     --plane:          #0d0d0d;
     --surface-1:      #1a1a19;
+    --surface-2:      #242422;
     --text-primary:   #ffffff;
     --text-secondary: #c3c2b7;
     --text-muted:     #898781;
@@ -67,6 +70,7 @@
     font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
     color: var(--text-muted); margin: 0 0 8px; font-weight: 600;
   }
+  .grow { flex: 1 1 auto; }
   .muted { color: var(--text-secondary); font-size: 12px; }
   /* The spec is context rather than status, so it sits a step further
      back than .muted, and wraps instead of widening the card when a
@@ -77,6 +81,17 @@
      skeleton — no layout jump, and the numbers stay readable. */
   main.stale { opacity: .55; }
 
+  .toggle {
+    display: inline-flex; border: 1px solid var(--border); border-radius: 999px;
+    background: var(--surface-1); padding: 2px; gap: 2px;
+  }
+  .toggle button {
+    font: inherit; font-size: 12px; color: var(--text-secondary); cursor: pointer;
+    background: none; border: 0; border-radius: 999px; padding: 3px 11px;
+  }
+  .toggle button[aria-pressed="true"] { background: var(--surface-2); color: var(--text-primary); font-weight: 600; }
+  .toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
   .banner {
     display: none; padding: 9px 12px; border-radius: 8px; font-size: 13px;
     border: 1px solid var(--warning); background: var(--surface-1);
@@ -85,34 +100,93 @@
   .banner.on { display: block; }
   .banner b { color: var(--text-primary); }
 
-  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
   .card {
     background: var(--surface-1); border: 1px solid var(--border);
     border-radius: 12px; padding: 14px 16px;
   }
+
+  /* The fleet strip. At ten devices the first question is "is anything
+     wrong?", and scanning ten cards to answer it is the wrong way round. */
+  .fleet { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; }
+  @media (max-width: 700px) { .fleet { grid-template-columns: 1fr; } }
+  .hero { display: flex; flex-direction: column; gap: 2px; padding-right: 18px; border-right: 1px solid var(--grid); }
+  @media (max-width: 700px) { .hero { border-right: 0; border-bottom: 1px solid var(--grid); padding: 0 0 12px; } }
+  /* Proportional figures: tabular-nums gives every digit the width of a
+     zero, which makes a standalone number look loose at display sizes. */
+  .hero .figure { font-size: clamp(38px, 5vw, 48px); line-height: 1.05; font-weight: 600; letter-spacing: -0.02em; }
+  .hero .figure .of { color: var(--text-muted); font-weight: 400; }
+  .hero .label { font-size: 12px; color: var(--text-secondary); }
+
+  .tiles { display: grid; gap: 14px 18px; grid-template-columns: repeat(auto-fit, minmax(124px, 1fr)); }
+  .tile { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .tile .head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+  .tile .readout { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 5px; min-width: 0; }
+  .tile .value { white-space: nowrap; }
+  .tile .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 600; }
+  .tile .value { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+  .tile .note { font-size: 11px; color: var(--text-muted); overflow-wrap: anywhere; }
+  /* A fleet tile is read top-down — label, then the reading — because the
+     strip is scanned across, and a column of left-aligned values scans
+     faster than values pushed to ragged right edges. */
+  .tiles .head { flex-direction: column; align-items: flex-start; gap: 0; }
+
+  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); }
   .card.down { border-color: var(--critical); }
-  .card h2 { font-size: 15px; margin: 0 0 3px; display: flex; align-items: center; gap: 8px; font-weight: 600; }
+  .card h2 { font-size: 15px; margin: 0 0 3px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; }
+  .card h2 .alias { color: var(--text-muted); font-weight: 400; font-size: 12px; }
+
+  /* The device line answers "which box is this?" — it is the one piece of
+     identity that is not a number, so it leads the card body. */
+  .device { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); margin: 5px 0 4px; }
+  .device svg { flex: none; color: var(--text-muted); }
+  .device .class { text-transform: lowercase; }
+  .device .model { color: var(--text-primary); font-weight: 500; overflow-wrap: anywhere; }
+  .device.unknown { color: var(--text-muted); font-style: italic; }
 
   .pill { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; font-weight: 500; }
   .pill.good { color: var(--good); }
   .pill.critical { color: var(--critical); }
   .pill.plain { color: var(--text-muted); }
 
-  .metric { display: grid; grid-template-columns: 58px 1fr auto; gap: 10px; align-items: center; margin-top: 10px; }
-  .metric .label { font-size: 12px; color: var(--text-secondary); }
-  .metric .readout { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
-  /* Proportional figures: tabular-nums makes a standalone value look loose. */
-  .metric .value { font-size: 13px; color: var(--text-primary); }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--grid); }
+  .stats .tile.wide { grid-column: 1 / -1; }
+  .stats .label { font-size: 11px; }
+  .stats .value { font-size: 13px; font-weight: 600; }
+  .stats .viz { height: 22px; display: flex; align-items: center; margin-top: auto; }
+  .viz svg { max-width: 100%; }
+
   /* Severity is carried by a word plus the colour, never the colour alone,
      and never by recolouring the value itself. */
-  .sev { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; padding: 1px 5px; border-radius: 4px; border: 1px solid currentColor; }
+  .sev { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; padding: 1px 5px; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; }
   .sev.warning { color: var(--warning); }
   .sev.critical { color: var(--critical); }
 
-  .meter { height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+  .meter { height: 6px; width: 100%; max-width: 120px; border-radius: 3px; background: var(--track); overflow: hidden; }
   .meter > i { display: block; height: 100%; background: var(--accent); }
   .meter > i.warning { background: var(--warning); }
   .meter > i.critical { background: var(--critical); }
+
+  /* Detailed density restores the full-width metric rows: one metric per
+     line, label and reading on the same baseline as the trend.
+
+     The head dissolves with display:contents so its label and value become
+     grid items of the row alongside the trend, and `order` puts them back
+     in reading order — label, trend, reading, severity. Rebuilding the DOM
+     instead would mean the toggle could not take effect until the next
+     poll, which is a poor trade for a viewing preference. */
+  .detailed .stats { grid-template-columns: 1fr; gap: 9px; }
+  .detailed .stats .tile,
+  .detailed .stats .tile.wide {
+    display: grid; grid-column: 1 / -1;
+    grid-template-columns: 62px 1fr auto;
+    gap: 4px 10px; align-items: center;
+  }
+  .detailed .stats .head { display: contents; }
+  .detailed .stats .label   { order: 1; }
+  .detailed .stats .viz     { order: 2; height: 26px; margin-top: 0; }
+  .detailed .stats .readout { order: 3; justify-content: flex-end; }
+  .detailed .stats .note    { order: 4; grid-column: 2 / -1; }
+  .detailed .cards { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
 
   .wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
@@ -133,10 +207,19 @@
 <header>
   <h1>k3s cluster</h1>
   <span class="muted" id="stamp">connecting…</span>
+  <span class="grow"></span>
+  <div class="toggle" role="group" aria-label="Card density">
+    <button type="button" id="density-compact" aria-pressed="true">Compact</button>
+    <button type="button" id="density-detailed" aria-pressed="false">Detailed</button>
+  </div>
 </header>
 <main id="main">
   <div class="banner" id="degraded"></div>
-  <section><div class="cards" id="nodes"></div></section>
+  <section><div class="card fleet" id="fleet"></div></section>
+  <section>
+    <h3 id="devices-heading">Devices</h3>
+    <div class="cards" id="nodes"></div>
+  </section>
   <section>
     <h3>Workloads</h3>
     <div class="wrap"><table>
@@ -181,6 +264,17 @@ function fmtUptime(s) {
   return d > 0 ? d + "d " + h + "h" : h + "h " + Math.floor((s % 3600) / 60) + "m";
 }
 
+// How long the node has been *in the cluster*, which is not the uptime
+// beside it: a laptop rebooted an hour ago is still a two-month-old member.
+function fmtSince(iso) {
+  if (!iso || String(iso).startsWith("0001")) return "";
+  const days = (Date.now() - new Date(iso).getTime()) / 86400000;
+  if (isNaN(days)) return "";
+  if (days < 1) return "joined today";
+  if (days < 60) return "joined " + Math.round(days) + "d ago";
+  return "joined " + Math.round(days / 30) + "mo ago";
+}
+
 // Severity thresholds live in one place so colour and wording never drift.
 // The comparison uses the *displayed* (rounded) value: a disk at 79.6%
 // renders as "80%", and a card that reads 80% with no warning beside it
@@ -193,20 +287,28 @@ function level(v, warn, bad) {
   return "";
 }
 
+const THRESHOLDS = {
+  cpu:  [75, 90],
+  mem:  [80, 92],
+  disk: [80, 90],
+  temp: [75, 85],
+};
+
 // The sparkline is the trend channel of a stat tile: the line recedes in a
 // de-emphasis step and the current reading is the accent dot, so the eye
 // lands on "now" and reads the history as context. Nulls are failed
 // samples, so the line breaks rather than drawing a straight segment
 // across a period nothing was known about.
 function sparkline(values, label, unit, opts) {
-  const w = 120, h = 26, pad = 3;
+  opts = opts || {};
+  const w = opts.width || 120, h = opts.height || 22, pad = 3;
   const svg = document.createElementNS(SVGNS, "svg");
   svg.setAttribute("viewBox", "0 0 " + w + " " + h);
   svg.setAttribute("width", w);
   svg.setAttribute("height", h);
   svg.setAttribute("role", "img");
 
-  const real = values.filter(has);
+  const real = (values || []).filter(has);
   const title = document.createElementNS(SVGNS, "title");
   title.textContent = real.length < 2
     ? label + ": no history yet"
@@ -216,8 +318,8 @@ function sparkline(values, label, unit, opts) {
   svg.setAttribute("aria-label", title.textContent);
   if (real.length < 2) return svg;
 
-  let lo = opts && has(opts.min) ? opts.min : Math.min(...real);
-  let hi = opts && has(opts.max) ? opts.max : Math.max(...real);
+  let lo = has(opts.min) ? opts.min : Math.min(...real);
+  let hi = has(opts.max) ? opts.max : Math.max(...real);
   if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
 
   const x = i => pad + (i / Math.max(values.length - 1, 1)) * (w - 2 * pad);
@@ -246,31 +348,18 @@ function sparkline(values, label, unit, opts) {
   flush();
 
   if (lastIdx >= 0) {
+    // The end dot carries a ring in the surface colour so it stays legible
+    // where it sits on top of the line it terminates.
     const dot = document.createElementNS(SVGNS, "circle");
     dot.setAttribute("cx", x(lastIdx).toFixed(1));
     dot.setAttribute("cy", y(values[lastIdx]).toFixed(1));
-    dot.setAttribute("r", "2.5");
+    dot.setAttribute("r", "3");
     dot.setAttribute("fill", "var(--accent)");
+    dot.setAttribute("stroke", "var(--surface-1)");
+    dot.setAttribute("stroke-width", "2");
     svg.appendChild(dot);
   }
   return svg;
-}
-
-function readout(valueText, severity, word) {
-  const box = el("div", "readout");
-  box.appendChild(el("span", "value", valueText));
-  if (severity) box.appendChild(el("span", "sev " + severity, word || severity));
-  return box;
-}
-
-function metricRow(label, valueText, severity, word, mid) {
-  const row = el("div", "metric");
-  row.appendChild(el("span", "label", label));
-  const cell = el("div");
-  if (mid) cell.appendChild(mid);
-  row.appendChild(cell);
-  row.appendChild(readout(valueText, severity, word));
-  return row;
 }
 
 // Meter: the unfilled track is a lighter step of the fill's own ramp, so
@@ -283,8 +372,38 @@ function meter(pct, severity) {
   return bar;
 }
 
-function batteryReadout(b) {
-  if (!b || (!has(b.percent) && !has(b.acOnline))) return { text: "—", sev: "", word: "" };
+// Stat tile: label, value, optional severity word, optional trend. The
+// same component builds a fleet tile and a card metric — only the density
+// class around it differs, which is why the toggle costs no second render
+// path.
+function tile(label, valueText, opts) {
+  opts = opts || {};
+  const box = el("div", "tile" + (opts.wide ? " wide" : ""));
+  const head = el("div", "head");
+  head.appendChild(el("span", "label", label));
+  const readout = el("div", "readout");
+  readout.appendChild(el("span", "value", valueText));
+  if (opts.severity) readout.appendChild(el("span", "sev " + opts.severity, opts.word || opts.severity));
+  head.appendChild(readout);
+  box.appendChild(head);
+  if (opts.viz) {
+    const viz = el("div", "viz");
+    viz.appendChild(opts.viz);
+    box.appendChild(viz);
+  }
+  if (opts.note) box.appendChild(el("span", "note", opts.note));
+  return box;
+}
+
+function batteryReadout(n) {
+  const b = n.battery;
+  if (!b || (!has(b.percent) && !has(b.acOnline))) {
+    // The agent answered, and what it found was no battery — a mini-PC or
+    // a Pi. That is a fact about the device, not a missing reading, so it
+    // gets a word rather than the em dash that means "not known".
+    if (has(n.uptimeSeconds) || has(n.tempC)) return { text: "no battery", sev: "", word: "", absent: true };
+    return { text: "—", sev: "", word: "" };
+  }
   if (!has(b.percent)) return { text: b.acOnline ? "on AC" : "on battery", sev: "", word: "" };
   const onBattery = b.status === "Discharging";
   const text = b.percent + "%" + (onBattery ? " · on battery" : (b.acOnline ? " · AC" : ""));
@@ -293,65 +412,225 @@ function batteryReadout(b) {
   return { text, sev: "", word: "" };
 }
 
+// One 14px glyph per chassis class, drawn on currentColor so it themes with
+// the text beside it. The word is always rendered too — the shape narrows
+// the search, it never carries the meaning alone.
+const GLYPHS = {
+  laptop:       "M3.5 3.5h9v6h-9zM1.5 11h13l-1 1.5h-11z",
+  desktop:      "M4.5 1.5h7v13h-7zM6 3.5h4M6 5.5h4",
+  "mini-pc":    "M1.5 4.5h13v7h-13zM3.5 8h2M11.5 8h1",
+  "all-in-one": "M2.5 2.5h11v8h-11zM6.5 13h3M8 10.5v2.5",
+  server:       "M1.5 2.5h13v4h-13zM1.5 9.5h13v4h-13zM3.5 4.5h1M3.5 11.5h1",
+  sbc:          "M3.5 3.5h9v9h-9zM6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2",
+  embedded:     "M3.5 3.5h9v9h-9zM6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2",
+  tablet:       "M3.5 1.5h9v13h-9zM7 12.5h2",
+  "stick-pc":   "M2.5 6.5h9v3h-9zM11.5 7.5h2v1h-2",
+  vm:           "M2.5 3.5h11v9h-11zM5.5 6.5h5v3h-5",
+  unknown:      "M2.5 3.5h11v9h-11z",
+};
+
+function glyph(cls) {
+  const svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("width", "14");
+  svg.setAttribute("height", "14");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(SVGNS, "path");
+  path.setAttribute("d", GLYPHS[cls] || GLYPHS.unknown);
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "1.2");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  svg.appendChild(path);
+  return svg;
+}
+
+// The device line: what the machine is, in the words someone would use out
+// loud. Unknown parts are dropped rather than dashed — on an identity line
+// a row of em dashes tells you less than a shorter line does.
+function deviceLine(n) {
+  const row = el("div", "device");
+  row.appendChild(glyph(n.deviceClass));
+
+  const model = [n.deviceVendor, n.deviceModel].filter(Boolean).join(" ");
+  if (!model && !n.deviceClass) {
+    row.classList.add("unknown");
+    row.appendChild(el("span", null, "unidentified device"));
+    row.title = "No usable DMI on this node. Name it with:\n" +
+      "kubectl annotate node " + n.name + " k3s-dash/model=\"…\" k3s-dash/type=laptop";
+    return row;
+  }
+  if (n.deviceClass) row.appendChild(el("span", "class", n.deviceClass));
+  if (n.deviceClass && model) row.appendChild(el("span", null, "·"));
+  if (model) row.appendChild(el("span", "model", model));
+  return row;
+}
+
 // What the node *is*, as opposed to what it is doing. These values do not
 // move between samples, so they belong under the title as context rather
-// than in a metric row with a sparkline. Unknown parts are dropped rather
-// than shown as em dashes: on a spec line a row of dashes tells you less
-// than a shorter line that only lists what is actually known. The two
-// lines have separate sources — capacities and platform come from the API
-// server, the CPU model from the node's own agent — so either can be
-// present without the other.
+// than in a stat tile with a sparkline. Unknown parts are dropped rather
+// than shown as em dashes. The lines have separate sources — capacities and
+// platform come from the API server, the CPU model from the node's own
+// agent — so any of them can be present without the others.
 function specLines(n) {
   const hardware = [];
   if (n.cpuModel) hardware.push(n.cpuModel);
   if (n.cpuCores) hardware.push(n.cpuCores + (n.cpuCores === 1 ? " core" : " cores"));
   if (n.memTotalBytes) hardware.push(fmtBytes(n.memTotalBytes) + " RAM");
   if (n.diskTotalBytes) hardware.push(fmtBytes(n.diskTotalBytes) + " disk");
-  const platform = [n.osImage, n.kernelVersion, n.architecture].filter(Boolean);
-  return [hardware, platform].filter(parts => parts.length).map(parts => parts.join(" \u00b7 "));
+
+  const ops = [];
+  if (n.internalIP) ops.push(n.internalIP);
+  ops.push(n.podCount + (n.podCount === 1 ? " pod" : " pods"));
+  if (has(n.uptimeSeconds)) ops.push("up " + fmtUptime(n.uptimeSeconds));
+  const since = fmtSince(n.joinedAt);
+  if (since) ops.push(since);
+
+  const platform = [n.osImage, n.kernelVersion, n.architecture, n.kubeletVersion].filter(Boolean);
+  return [hardware, ops, platform].filter(parts => parts.length).map(parts => parts.join(" · "));
 }
 
 function nodeCard(n) {
   const card = el("div", "card" + (n.ready ? "" : " down"));
 
   const title = el("h2");
-  title.appendChild(el("span", null, n.name));
+  title.appendChild(el("span", null, n.displayName || n.name));
+  // The Kubernetes node name is what kubectl answers to, so a friendly name
+  // never replaces it — it only leads.
+  if (n.displayName) title.appendChild(el("span", "alias", n.name));
   title.appendChild(el("span", "pill " + (n.ready ? "good" : "critical"), n.ready ? "Ready" : "NotReady"));
   if (n.controlPlane) title.appendChild(el("span", "pill plain", "control-plane"));
   card.appendChild(title);
 
-  const sub = [fmtUptime(n.uptimeSeconds) + " up", n.podCount + " pods"];
-  if (n.kubeletVersion) sub.push(n.kubeletVersion);
-  card.appendChild(el("div", "muted", sub.join(" · ")));
-
+  card.appendChild(deviceLine(n));
   for (const line of specLines(n)) card.appendChild(el("div", "spec", line));
 
-  const cpuSev = level(n.cpuPercent, 75, 90);
-  card.appendChild(metricRow("CPU", fmtPct(n.cpuPercent), cpuSev, cpuSev === "critical" ? "saturated" : "busy",
-    sparkline(n.series.cpuPercent, "CPU", "%", { min: 0, max: 100 })));
+  const stats = el("div", "stats");
 
-  const memSev = level(n.memPercent, 80, 92);
-  card.appendChild(metricRow("Memory", fmtPct(n.memPercent), memSev, memSev === "critical" ? "near limit" : "high",
-    sparkline(n.series.memPercent, "Memory", "%", { min: 0, max: 100 })));
+  const cpuSev = level(n.cpuPercent, ...THRESHOLDS.cpu);
+  stats.appendChild(tile("CPU", fmtPct(n.cpuPercent), {
+    severity: cpuSev, word: cpuSev === "critical" ? "saturated" : "busy",
+    viz: sparkline(n.series.cpuPercent, "CPU", "%", { min: 0, max: 100 }),
+  }));
 
-  const diskSev = level(n.diskPercent, 80, 90);
-  const diskText = has(n.diskPercent) ? fmtPct(n.diskPercent) + " · " + fmtBytes(n.diskUsedBytes) : "—";
-  card.appendChild(metricRow("Disk", diskText, diskSev, diskSev === "critical" ? "almost full" : "filling",
-    meter(n.diskPercent, diskSev)));
+  const memSev = level(n.memPercent, ...THRESHOLDS.mem);
+  stats.appendChild(tile("Memory", fmtPct(n.memPercent), {
+    severity: memSev, word: memSev === "critical" ? "near limit" : "high",
+    viz: sparkline(n.series.memPercent, "Memory", "%", { min: 0, max: 100 }),
+  }));
 
-  const tempSev = level(n.tempC, 75, 85);
-  card.appendChild(metricRow("Temp", fmtTemp(n.tempC), tempSev, tempSev === "critical" ? "overheating" : "hot",
-    sparkline(n.series.tempC, "Temperature", "°C")));
+  const diskSev = level(n.diskPercent, ...THRESHOLDS.disk);
+  stats.appendChild(tile("Disk", fmtPct(n.diskPercent), {
+    severity: diskSev, word: diskSev === "critical" ? "almost full" : "filling",
+    viz: meter(n.diskPercent, diskSev),
+  }));
 
-  const bat = batteryReadout(n.battery);
-  card.appendChild(metricRow("Battery", bat.text, bat.sev, bat.word,
-    sparkline(n.series.batteryPercent, "Battery", "%", { min: 0, max: 100 })));
+  const tempSev = level(n.tempC, ...THRESHOLDS.temp);
+  stats.appendChild(tile("Temp", fmtTemp(n.tempC), {
+    severity: tempSev, word: tempSev === "critical" ? "overheating" : "hot",
+    viz: sparkline(n.series.tempC, "Temperature", "°C"),
+  }));
 
+  const bat = batteryReadout(n);
+  stats.appendChild(tile("Battery", bat.text, {
+    wide: true, severity: bat.sev, word: bat.word,
+    // A device with no battery has no battery history to draw either.
+    viz: bat.absent ? null : sparkline(n.series.batteryPercent, "Battery", "%", { min: 0, max: 100 }),
+  }));
+
+  card.appendChild(stats);
   return card;
 }
 
+// Trouble first. The sort lives here rather than in the server because it
+// needs the thresholds above, and a second copy of 75/90 and 80/92 in Go is
+// how the two drift apart. Name order breaks ties, so a healthy fleet keeps
+// the stable ordering the cards had before.
+function troubleScore(n) {
+  if (!n.ready) return 1000;
+  let score = 0;
+  for (const [v, t] of [[n.cpuPercent, THRESHOLDS.cpu], [n.memPercent, THRESHOLDS.mem],
+                        [n.diskPercent, THRESHOLDS.disk], [n.tempC, THRESHOLDS.temp]]) {
+    const sev = level(v, ...t);
+    if (sev === "critical") score += 100;
+    else if (sev === "warning") score += 10;
+  }
+  if (n.battery && n.battery.status === "Discharging") {
+    score += has(n.battery.percent) && n.battery.percent < 25 ? 100 : 10;
+  }
+  return score;
+}
+
+function sortedNodes(nodes) {
+  return nodes.slice().sort((a, b) => troubleScore(b) - troubleScore(a) || a.name.localeCompare(b.name));
+}
+
+function fleetPanel(fleet) {
+  const series = fleet.series || {};
+  const hero = el("div", "hero");
+  const figure = el("div", "figure");
+  figure.appendChild(el("span", null, String(fleet.ready)));
+  figure.appendChild(el("span", "of", "/" + fleet.devices));
+  hero.appendChild(figure);
+  const down = fleet.devices - fleet.ready;
+  hero.appendChild(el("div", "label", down === 0
+    ? (fleet.devices === 1 ? "device ready" : "devices ready")
+    : down + (down === 1 ? " device is not ready" : " devices are not ready")));
+
+  const tiles = el("div", "tiles");
+
+  const cpuSev = level(fleet.cpuPercent, ...THRESHOLDS.cpu);
+  tiles.appendChild(tile("CPU", fmtPct(fleet.cpuPercent), {
+    severity: cpuSev, word: cpuSev === "critical" ? "saturated" : "busy",
+    viz: sparkline(series.cpuPercent, "Cluster CPU", "%", { min: 0, max: 100 }),
+    note: fleet.cpuCores ? fleet.cpuCores + " cores total" : "",
+  }));
+
+  const memSev = level(fleet.memPercent, ...THRESHOLDS.mem);
+  tiles.appendChild(tile("Memory", fmtPct(fleet.memPercent), {
+    severity: memSev, word: memSev === "critical" ? "near limit" : "high",
+    viz: sparkline(series.memPercent, "Cluster memory", "%", { min: 0, max: 100 }),
+    note: fleet.memTotalBytes ? fmtBytes(fleet.memTotalBytes) + " total" : "",
+  }));
+
+  const diskSev = level(fleet.diskPercent, ...THRESHOLDS.disk);
+  tiles.appendChild(tile("Disk", fmtPct(fleet.diskPercent), {
+    severity: diskSev, word: diskSev === "critical" ? "almost full" : "filling",
+    viz: sparkline(series.diskPercent, "Cluster disk", "%", { min: 0, max: 100 }),
+  }));
+
+  const tempSev = level(fleet.hottestC, ...THRESHOLDS.temp);
+  tiles.appendChild(tile("Hottest", fmtTemp(fleet.hottestC), {
+    severity: tempSev, word: tempSev === "critical" ? "overheating" : "hot",
+    viz: sparkline(series.tempC, "Hottest device", "°C"),
+    note: fleet.hottestNode || "",
+  }));
+
+  const onAC = fleet.devices - fleet.onBattery;
+  tiles.appendChild(tile("Power", fleet.onBattery ? fleet.onBattery + " unplugged" : "all on AC", {
+    severity: fleet.onBattery ? "warning" : "", word: "on battery",
+    note: fleet.onBattery ? onAC + " on AC" : "",
+  }));
+
+  tiles.appendChild(tile("Workloads", fleet.workloadsDegraded
+    ? fleet.workloadsDegraded + " of " + fleet.workloadsTotal
+    : "all healthy", {
+    severity: fleet.workloadsDegraded ? "critical" : "", word: "degraded",
+    note: fleet.pods + (fleet.pods === 1 ? " pod" : " pods") + " across " +
+      fleet.workloadsTotal + (fleet.workloadsTotal === 1 ? " workload" : " workloads"),
+  }));
+
+  return [hero, tiles];
+}
+
 function render(s) {
-  document.getElementById("nodes").replaceChildren(...s.nodes.map(nodeCard));
+  document.getElementById("fleet").replaceChildren(...fleetPanel(s.fleet));
+
+  const nodes = sortedNodes(s.nodes);
+  document.getElementById("nodes").replaceChildren(...nodes.map(nodeCard));
+  document.getElementById("devices-heading").textContent =
+    nodes.length === 1 ? "Device" : nodes.length + " devices";
 
   const tbody = document.getElementById("workloads");
   if (s.workloads.length) {
@@ -424,6 +703,28 @@ function render(s) {
   }
 }
 
+// Density is a viewing preference, so it lives in the browser rather than in
+// the cluster. Storage can throw in a private window, and a dashboard that
+// fails to render because it could not remember a layout choice would be a
+// poor trade.
+const DENSITY_KEY = "k3s-dash.density";
+
+function applyDensity(mode) {
+  const detailed = mode === "detailed";
+  document.body.classList.toggle("detailed", detailed);
+  document.getElementById("density-compact").setAttribute("aria-pressed", String(!detailed));
+  document.getElementById("density-detailed").setAttribute("aria-pressed", String(detailed));
+  try { localStorage.setItem(DENSITY_KEY, mode); } catch (err) { /* not fatal */ }
+}
+
+function initDensity() {
+  let saved = "compact";
+  try { saved = localStorage.getItem(DENSITY_KEY) || "compact"; } catch (err) { /* not fatal */ }
+  applyDensity(saved);
+  document.getElementById("density-compact").addEventListener("click", () => applyDensity("compact"));
+  document.getElementById("density-detailed").addEventListener("click", () => applyDensity("detailed"));
+}
+
 async function tick() {
   const main = document.getElementById("main");
   try {
@@ -438,6 +739,7 @@ async function tick() {
   }
 }
 
+initDensity();
 tick();
 setInterval(tick, 5000);
 </script>

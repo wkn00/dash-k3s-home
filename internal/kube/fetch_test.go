@@ -27,8 +27,11 @@ func routes(t *testing.T, bodies map[string]string) *Client {
 }
 
 const nodeListJSON = `{"items":[
- {"metadata":{"name":"wk","labels":{"node-role.kubernetes.io/control-plane":"true"},"creationTimestamp":"2026-06-22T16:20:00Z"},
+ {"metadata":{"name":"wk","labels":{"node-role.kubernetes.io/control-plane":"true"},
+              "annotations":{"k3s-dash/name":"Living room ThinkPad","k3s-dash/type":"laptop"},
+              "creationTimestamp":"2026-06-22T16:20:00Z"},
   "status":{"conditions":[{"type":"MemoryPressure","status":"False"},{"type":"Ready","status":"True"}],
+            "addresses":[{"type":"Hostname","address":"wk"},{"type":"InternalIP","address":"192.168.10.185"}],
             "nodeInfo":{"kubeletVersion":"v1.35.5+k3s1","osImage":"Ubuntu 26.04 LTS",
                         "kernelVersion":"6.14.0-27-generic","architecture":"amd64"},
             "capacity":{"cpu":"8","memory":"16308880Ki"}}},
@@ -72,6 +75,41 @@ func TestNodes(t *testing.T) {
 	if got[1].KernelVersion != "" || got[1].Architecture != "" {
 		t.Errorf("wk2 = %q/%q, want both empty when nodeInfo omits them",
 			got[1].KernelVersion, got[1].Architecture)
+	}
+}
+
+// The address list is not ordered, and Hostname is commonly first, so the
+// InternalIP has to be found by type rather than by position.
+func TestNodesReadTheInternalIP(t *testing.T) {
+	c := routes(t, map[string]string{"/api/v1/nodes": nodeListJSON})
+	got, err := c.Nodes(context.Background())
+	if err != nil {
+		t.Fatalf("Nodes: %v", err)
+	}
+	if got[0].InternalIP != "192.168.10.185" {
+		t.Errorf("wk InternalIP = %q, want %q", got[0].InternalIP, "192.168.10.185")
+	}
+	if got[1].InternalIP != "" {
+		t.Errorf("wk2 InternalIP = %q, want empty when the node reports no addresses", got[1].InternalIP)
+	}
+}
+
+// Annotations carry the human's overrides for a device's name and type.
+// They are annotations rather than labels because a label value cannot
+// contain a space, and "Living room ThinkPad" has two.
+func TestNodesReadAnnotations(t *testing.T) {
+	c := routes(t, map[string]string{"/api/v1/nodes": nodeListJSON})
+	got, err := c.Nodes(context.Background())
+	if err != nil {
+		t.Fatalf("Nodes: %v", err)
+	}
+	if got[0].Annotations["k3s-dash/name"] != "Living room ThinkPad" {
+		t.Errorf("wk annotation name = %q, want %q",
+			got[0].Annotations["k3s-dash/name"], "Living room ThinkPad")
+	}
+	// A node with no annotations must still be safe to index.
+	if got[1].Annotations["k3s-dash/name"] != "" {
+		t.Errorf("wk2 annotation name = %q, want empty", got[1].Annotations["k3s-dash/name"])
 	}
 }
 
