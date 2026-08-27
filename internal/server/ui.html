@@ -8,12 +8,15 @@
   /* Roles, not raw hex, so light/dark swap in one place.
      Status colours are the fixed status palette and are never themed:
      warning is deliberately sub-3:1 on the light surface, which is why
-     every severity on this page ships a word as well as a colour. */
+     every severity on this page ships a word as well as a colour. The
+     stat-accent colours (cpu/memory/disk/...) are fixed the same way —
+     they identify a metric category, not a severity, so they must read
+     the same regardless of theme. */
   :root {
     color-scheme: light;
-    --plane:          #f9f9f7;
-    --surface-1:      #fcfcfb;
-    --surface-2:      #f2f2ee;
+    --plane:          #f7f7f5;
+    --surface-1:      #fdfdfc;
+    --surface-2:      #f0f0ec;
     --text-primary:   #0b0b0b;
     --text-secondary: #52514e;
     --text-muted:     #898781;
@@ -21,43 +24,59 @@
     --border:         rgba(11, 11, 11, 0.10);
     --accent:         #2a78d6;
     --accent-soft:    #86b6ef;
-    --track:          #cde2fb;
-    --good:           #0ca30c;
-    --warning:        #fab219;
+    --accent-bg:      rgba(42, 120, 214, 0.11);
+    --track:          #e4e9ee;
+    --good:           #0ca34f;
+    --good-bg:        rgba(12, 163, 79, 0.12);
+    --warning:        #c9820f;
+    --warning-bg:     rgba(201, 130, 15, 0.14);
     --critical:       #d03b3b;
-    --shadow:         0 1px 2px rgba(11, 11, 11, 0.04), 0 4px 14px rgba(11, 11, 11, 0.045);
+    --critical-bg:    rgba(208, 59, 59, 0.11);
+    --shadow:         0 1px 2px rgba(11, 11, 11, 0.04), 0 4px 14px rgba(11, 11, 11, 0.05);
+    /* Fixed stat-category accents — identify what a KPI/badge is about,
+       not how healthy it is, so unlike --good/--warning/--critical these
+       carry no status meaning and are safe to use decoratively. */
+    --c-devices: #0ea5e9; --c-devices-bg: rgba(14, 165, 233, .13);
+    --c-cpu:     #3b82f6; --c-cpu-bg:     rgba(59, 130, 246, .13);
+    --c-mem:     #8b5cf6; --c-mem-bg:     rgba(139, 92, 246, .13);
+    --c-disk:    #0d9488; --c-disk-bg:    rgba(13, 148, 136, .13);
+    --c-temp:    #ea580c; --c-temp-bg:    rgba(234, 88, 12, .13);
+    --c-power:   #16a34a; --c-power-bg:   rgba(22, 163, 74, .13);
+    --c-work:    #db2777; --c-work-bg:    rgba(219, 39, 119, .13);
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) {
       color-scheme: dark;
-      --plane:          #0d0d0d;
-      --surface-1:      #1a1a19;
-      --surface-2:      #242422;
-      --text-primary:   #ffffff;
+      --plane:          #0b0c0d;
+      --surface-1:      #16181a;
+      --surface-2:      #202225;
+      --text-primary:   #f4f4f3;
       --text-secondary: #c3c2b7;
-      --text-muted:     #898781;
-      --grid:           #2c2c2a;
-      --border:         rgba(255, 255, 255, 0.10);
-      --accent:         #3987e5;
+      --text-muted:     #8b8d90;
+      --grid:           #2a2c2f;
+      --border:         rgba(255, 255, 255, 0.11);
+      --accent:         #4f97ea;
       --accent-soft:    #1c5cab;
-      --track:          #0d366b;
-      --shadow:         0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 16px rgba(0, 0, 0, 0.28);
+      --accent-bg:      rgba(79, 151, 234, 0.16);
+      --track:          #23262a;
+      --shadow:         0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 18px rgba(0, 0, 0, 0.32);
     }
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
-    --plane:          #0d0d0d;
-    --surface-1:      #1a1a19;
-    --surface-2:      #242422;
-    --text-primary:   #ffffff;
+    --plane:          #0b0c0d;
+    --surface-1:      #16181a;
+    --surface-2:      #202225;
+    --text-primary:   #f4f4f3;
     --text-secondary: #c3c2b7;
-    --text-muted:     #898781;
-    --grid:           #2c2c2a;
-    --border:         rgba(255, 255, 255, 0.10);
-    --accent:         #3987e5;
+    --text-muted:     #8b8d90;
+    --grid:           #2a2c2f;
+    --border:         rgba(255, 255, 255, 0.11);
+    --accent:         #4f97ea;
     --accent-soft:    #1c5cab;
-    --track:          #0d366b;
-    --shadow:         0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 16px rgba(0, 0, 0, 0.28);
+    --accent-bg:      rgba(79, 151, 234, 0.16);
+    --track:          #23262a;
+    --shadow:         0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 18px rgba(0, 0, 0, 0.32);
   }
 
   * { box-sizing: border-box; }
@@ -67,11 +86,18 @@
     color: var(--text-primary);
     font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  header { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 20px 20px 12px; }
-  h1 { font-size: 17px; margin: 0; letter-spacing: -0.01em; font-weight: 600; }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    padding: 13px 24px; position: sticky; top: 0; z-index: 20;
+    background: var(--plane); border-bottom: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .logo { color: var(--accent); flex: none; }
+  .brand h1 { font-size: 16px; margin: 0; letter-spacing: -0.01em; font-weight: 700; line-height: 1.2; }
+  .brand .tagline { font-size: 11.5px; color: var(--text-muted); }
   h3 {
     font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
-    color: var(--text-muted); margin: 0 0 8px; font-weight: 600;
+    color: var(--text-muted); margin: 0 0 10px; font-weight: 600;
   }
   .grow { flex: 1 1 auto; }
   .muted { color: var(--text-secondary); font-size: 12px; }
@@ -79,10 +105,23 @@
      back than .muted, and wraps instead of widening the card when a
      distro ships a long os-release string. */
   .spec { color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
-  main { padding: 0 20px 40px; display: grid; gap: 20px; transition: opacity .2s ease; }
+  main { padding: 24px 24px 48px; display: grid; gap: 26px; transition: opacity .2s ease; max-width: 1600px; margin: 0 auto; }
   /* Refetch failure holds the previous render rather than flashing a
      skeleton — no layout jump, and the numbers stay readable. */
   main.stale { opacity: .55; }
+
+  /* Live sample indicator: a pulsing dot reads as "this is moving" at a
+     glance, the way a real-time dashboard should — a plain timestamp
+     doesn't communicate liveness on its own. */
+  .live {
+    display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-secondary);
+    background: var(--surface-1); border: 1px solid var(--border);
+    padding: 5px 11px 5px 9px; border-radius: 999px;
+  }
+  .live .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); flex: none; }
+  .live:not(.stale) .dot { animation: live-pulse 2s ease-in-out infinite; }
+  .live.stale .dot { background: var(--critical); }
+  @keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 
   .toggle {
     display: inline-flex; border: 1px solid var(--border); border-radius: 999px;
@@ -104,47 +143,59 @@
   .banner b { color: var(--text-primary); }
 
   .card {
-    background: var(--surface-1); border: 1px solid var(--border);
+    background: var(--surface-1); border: 1px solid var(--border); border-left: 4px solid var(--border);
     border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow);
   }
+  .card.sev-warning { border-left-color: var(--warning); }
+  .card.sev-critical { border-left-color: var(--critical); }
 
-  /* The fleet strip. At ten devices the first question is "is anything
-     wrong?", and scanning ten cards to answer it is the wrong way round. */
-  .fleet { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; }
-  @media (max-width: 700px) { .fleet { grid-template-columns: 1fr; } }
-  .hero { display: flex; flex-direction: column; gap: 2px; padding-right: 18px; border-right: 1px solid var(--grid); }
-  @media (max-width: 700px) { .hero { border-right: 0; border-bottom: 1px solid var(--grid); padding: 0 0 12px; } }
-  /* Proportional figures: tabular-nums gives every digit the width of a
-     zero, which makes a standalone number look loose at display sizes. */
-  .hero .figure { font-size: clamp(38px, 5vw, 48px); line-height: 1.05; font-weight: 600; letter-spacing: -0.02em; }
-  .hero .figure .of { color: var(--text-muted); font-weight: 400; }
-  .hero .label { font-size: 12px; color: var(--text-secondary); }
+  /* Overview: one card per fleet metric, each with a colour-coded icon
+     badge, instead of one dense card everything was crammed into — this
+     is the "can I tell what's wrong in one glance" row. */
+  .kpis { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); }
+  .kpi {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px;
+    padding: 15px 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px;
+    min-width: 0; border-top: 3px solid transparent;
+  }
+  .kpi.sev-warning { border-top-color: var(--warning); }
+  .kpi.sev-critical { border-top-color: var(--critical); }
+  .kpi.wide { grid-column: span 2; }
+  .kpi-top { display: flex; align-items: center; gap: 10px; }
+  .badge {
+    width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center;
+    justify-content: center; flex: none;
+  }
+  .badge.devices { background: var(--c-devices-bg); color: var(--c-devices); }
+  .badge.cpu     { background: var(--c-cpu-bg);     color: var(--c-cpu); }
+  .badge.memory  { background: var(--c-mem-bg);     color: var(--c-mem); }
+  .badge.disk    { background: var(--c-disk-bg);    color: var(--c-disk); }
+  .badge.temp    { background: var(--c-temp-bg);    color: var(--c-temp); }
+  .badge.power   { background: var(--c-power-bg);   color: var(--c-power); }
+  .badge.work    { background: var(--c-work-bg);    color: var(--c-work); }
+  .badge.identity{ background: var(--accent-bg);    color: var(--accent); }
+  .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); font-weight: 600; }
+  .kpi-readout { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0; }
+  .kpi-value { font-size: 25px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .kpi-value .of { color: var(--text-muted); font-weight: 400; font-size: 0.6em; }
+  .kpi.wide .kpi-value { font-size: 38px; }
+  .kpi-note { font-size: 11.5px; color: var(--text-muted); overflow-wrap: anywhere; }
+  .kpi-viz { height: 24px; margin-top: -4px; }
+  .kpi-viz svg { max-width: 100%; }
 
-  .tiles { display: grid; gap: 14px 18px; grid-template-columns: repeat(auto-fit, minmax(124px, 1fr)); }
-  .tile { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .tile .head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
-  .tile .readout { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 5px; min-width: 0; }
-  .tile .value { white-space: nowrap; }
-  .tile .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 600; }
-  .tile .value { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
-  .tile .note { font-size: 11px; color: var(--text-muted); overflow-wrap: anywhere; }
-  /* A fleet tile is read top-down — label, then the reading — because the
-     strip is scanned across, and a column of left-aligned values scans
-     faster than values pushed to ragged right edges. */
-  .tiles .head { flex-direction: column; align-items: flex-start; gap: 0; }
-
-  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); }
-  .card.down { border-color: var(--critical); }
+  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
   .card h2 { font-size: 15px; margin: 0 0 3px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; }
   .card h2 .alias { color: var(--text-muted); font-weight: 400; font-size: 12px; }
 
-  /* The device line answers "which box is this?" — it is the one piece of
-     identity that is not a number, so it leads the card body. */
-  .device { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary); margin: 5px 0 4px; }
-  .device svg { flex: none; color: var(--text-muted); }
+  /* The device line answers "which box is this?" — a colour-badged icon
+     plus the words, so identity reads before any number does. */
+  .device { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); margin: 8px 0 4px; }
+  .device .badge { width: 26px; height: 26px; border-radius: 8px; }
+  .device .badge svg { width: 15px; height: 15px; }
   .device .class { text-transform: lowercase; }
   .device .model { color: var(--text-primary); font-weight: 500; overflow-wrap: anywhere; }
   .device.unknown { color: var(--text-muted); font-style: italic; }
+  .device.unknown .badge { background: var(--surface-2); color: var(--text-muted); }
 
   .pill { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; font-weight: 500; }
   .pill.good { color: var(--good); }
@@ -154,9 +205,16 @@
   .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--grid); }
   .stats .tile.wide { grid-column: 1 / -1; }
   .stats .label { font-size: 11px; }
-  .stats .value { font-size: 13px; font-weight: 600; }
+  .stats .value { font-size: 13.5px; font-weight: 600; }
   .stats .viz { height: 22px; display: flex; align-items: center; margin-top: auto; }
   .viz svg { max-width: 100%; }
+
+  .tile { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .tile .head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
+  .tile .readout { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 5px; min-width: 0; }
+  .tile .value { white-space: nowrap; }
+  .tile .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 600; }
+  .tile .note { font-size: 11px; color: var(--text-muted); overflow-wrap: anywhere; }
 
   /* Severity is carried by a word plus the colour, never the colour alone,
      and never by recolouring the value itself. */
@@ -164,7 +222,7 @@
   .sev.warning { color: var(--warning); }
   .sev.critical { color: var(--critical); }
 
-  .meter { height: 6px; width: 100%; max-width: 120px; border-radius: 3px; background: var(--track); overflow: hidden; }
+  .meter { height: 7px; width: 100%; max-width: 130px; border-radius: 4px; background: var(--track); overflow: hidden; }
   .meter > i { display: block; height: 100%; background: var(--accent); }
   .meter > i.warning { background: var(--warning); }
   .meter > i.critical { background: var(--critical); }
@@ -189,24 +247,26 @@
   .detailed .stats .viz     { order: 2; height: 26px; margin-top: 0; }
   .detailed .stats .readout { order: 3; justify-content: flex-end; }
   .detailed .stats .note    { order: 4; grid-column: 2 / -1; }
-  .detailed .cards { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+  .detailed .cards { grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); }
 
-  /* The drill-down toggle sits where the card's border already ends, so it
-     reads as "there's more below the fold" rather than a bolted-on button. */
+  /* The drill-down toggle is a real button, not a link-styled row — it has
+     to look clickable at a glance, since it's the whole answer to "what's
+     running on this device". */
   .drill-toggle {
-    display: flex; align-items: center; gap: 7px; width: 100%; margin-top: 11px; padding-top: 11px;
-    border: 0; border-top: 1px solid var(--grid); background: none; font: inherit; font-size: 12.5px;
-    color: var(--text-secondary); cursor: pointer; text-align: left;
+    display: flex; align-items: center; gap: 7px; width: 100%; margin-top: 12px;
+    border: 0; background: var(--surface-2); border-radius: 9px; padding: 8px 11px;
+    font: inherit; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); cursor: pointer; text-align: left;
   }
-  .drill-toggle:hover { color: var(--text-primary); }
+  .drill-toggle:hover { background: var(--accent-bg); color: var(--accent); }
   .drill-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .drill-toggle .count {
-    margin-left: auto; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums;
+    margin-left: auto; font-size: 11px; color: inherit; opacity: .75; font-variant-numeric: tabular-nums;
+    background: var(--surface-1); border-radius: 999px; padding: 1px 7px;
   }
-  .drill-toggle .chev { flex: none; color: var(--text-muted); transition: transform .15s ease; }
+  .drill-toggle .chev { flex: none; color: inherit; opacity: .7; transition: transform .15s ease; }
   .drill-toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
 
-  .drill { margin-top: 9px; display: flex; flex-direction: column; gap: 10px; }
+  .drill { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
   .drill h4 {
     font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em;
     color: var(--text-muted); margin: 0; font-weight: 600;
@@ -226,17 +286,39 @@
   .drill-row .meta { font-size: 11px; color: var(--text-muted); overflow-wrap: anywhere; }
   .drill-row .pill { flex: none; }
 
-  ul.events { list-style: none; margin: 0; padding: 0; }
-  ul.events li { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; margin-bottom: 8px; }
-  ul.events li .msg { color: var(--text-secondary); font-size: 12px; }
+  /* Warnings read as alerts, not table rows: an icon chip and a left
+     accent bar so a noisy cluster is scannable by shape, not just text. */
+  ul.events { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+  .alert {
+    display: flex; gap: 12px; background: var(--surface-1); border: 1px solid var(--border);
+    border-left: 3px solid var(--warning); border-radius: 10px; padding: 10px 14px; box-shadow: var(--shadow);
+  }
+  .alert-icon {
+    flex: none; width: 26px; height: 26px; border-radius: 8px; margin-top: 1px;
+    background: var(--warning-bg); color: var(--warning); display: flex; align-items: center; justify-content: center;
+  }
+  .alert-body { min-width: 0; }
+  .alert-head { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: baseline; }
+  .alert .msg { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
   .empty { color: var(--text-muted); font-size: 13px; padding: 10px 2px; }
 </style>
 </head>
 <body>
 <header>
-  <h1>k3s cluster</h1>
-  <span class="muted" id="stamp">connecting…</span>
+  <div class="brand">
+    <span class="logo" id="logo"></span>
+    <div>
+      <h1>k3s cluster</h1>
+      <div class="tagline">Homelab fleet monitor</div>
+    </div>
+  </div>
+  <div class="live" id="live"><i class="dot"></i><span id="stamp">connecting…</span></div>
   <span class="grow"></span>
+  <div class="toggle" role="group" aria-label="Theme">
+    <button type="button" id="theme-auto" aria-pressed="true">Auto</button>
+    <button type="button" id="theme-light" aria-pressed="false">Light</button>
+    <button type="button" id="theme-dark" aria-pressed="false">Dark</button>
+  </div>
   <div class="toggle" role="group" aria-label="Card density">
     <button type="button" id="density-compact" aria-pressed="true">Compact</button>
     <button type="button" id="density-detailed" aria-pressed="false">Detailed</button>
@@ -244,7 +326,10 @@
 </header>
 <main id="main">
   <div class="banner" id="degraded"></div>
-  <section><div class="card fleet" id="fleet"></div></section>
+  <section>
+    <h3>Overview</h3>
+    <div class="kpis" id="kpis"></div>
+  </section>
   <section>
     <h3 id="devices-heading">Devices</h3>
     <div class="cards" id="nodes"></div>
@@ -401,9 +486,8 @@ function meter(pct, severity) {
 }
 
 // Stat tile: label, value, optional severity word, optional trend. The
-// same component builds a fleet tile and a card metric — only the density
-// class around it differs, which is why the toggle costs no second render
-// path.
+// same component builds a device card metric — density toggling costs no
+// second render path since it's pure CSS around the same markup.
 function tile(label, valueText, opts) {
   opts = opts || {};
   const box = el("div", "tile" + (opts.wide ? " wide" : ""));
@@ -423,15 +507,107 @@ function tile(label, valueText, opts) {
   return box;
 }
 
-// Whether the per-node agent has ever reported anything for this node, as
-// opposed to reporting and finding no battery. A node with no agent at all
-// (missing DaemonSet toleration, ImagePullBackOff, ...) gets one tile that
-// says so, rather than two tiles individually shrugging with an em dash —
-// that reads as broken next to a fully-populated card, not as "unknown".
-function hasAgentData(n) {
-  const b = n.battery;
-  return has(n.cpuModel) || has(n.uptimeSeconds) || has(n.tempC) ||
-    (b != null && (has(b.percent) || has(b.acOnline)));
+// One small icon set for the overview KPI row and device/alert badges,
+// drawn the same way the chassis glyphs are: strokes on currentColor, so
+// every icon themes with the badge colour around it rather than carrying
+// its own.
+const ICONS = {
+  devices:   "M1.5 2.5h13v4h-13zM1.5 9.5h13v4h-13zM3.5 4.5h1M3.5 11.5h1",
+  cpu:       "M5.5 5.5h9v9h-9zM8 2.5v2M12 2.5v2M8 15.5v2M12 15.5v2M2.5 8h2M2.5 12h2M15.5 8h2M15.5 12h2",
+  memory:    "M3 4.5h14v3h-14zM3 8.5h14v3h-14zM3 12.5h14v3h-14z",
+  disk:      "M2.5 4.5h15v11h-15zM2.5 8.5h15M13 12.5h.01M15.5 12.5h.01",
+  temp:      "M10 3v8",
+  power:     "M11 2L4 12h5l-1.5 7L17 8h-5.5z",
+  workloads: "M3 3h5v5h-5zM12 3h5v5h-5zM3 12h5v5h-5zM12 12h5v5h-5z",
+  warning:   "M10 2.3L18.3 17h-16.6zM10 7.3v4.7M10 14.7h.01",
+};
+
+// icon() builds a small badge glyph from one of the ICONS paths, with an
+// optional extra circle (the thermometer bulb) or a solid fill (the power
+// bolt reads better filled than outlined at this size).
+function icon(name, opts) {
+  opts = opts || {};
+  const svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("width", "16");
+  svg.setAttribute("height", "16");
+  svg.setAttribute("viewBox", "0 0 20 20");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(SVGNS, "path");
+  path.setAttribute("d", ICONS[name]);
+  path.setAttribute("fill", opts.fill ? "currentColor" : "none");
+  path.setAttribute("stroke", opts.fill ? "none" : "currentColor");
+  path.setAttribute("stroke-width", "1.3");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  svg.appendChild(path);
+  if (opts.circle) {
+    const c = document.createElementNS(SVGNS, "circle");
+    c.setAttribute("cx", opts.circle[0]);
+    c.setAttribute("cy", opts.circle[1]);
+    c.setAttribute("r", opts.circle[2]);
+    c.setAttribute("fill", "none");
+    c.setAttribute("stroke", "currentColor");
+    c.setAttribute("stroke-width", "1.3");
+    svg.appendChild(c);
+  }
+  return svg;
+}
+
+// The 3-node mark in the header — an abstract cluster, not a chassis, so it
+// reads as the product rather than as one more device glyph.
+function logoMark() {
+  const svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("width", "22");
+  svg.setAttribute("height", "22");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(SVGNS, "path");
+  path.setAttribute("d", "M6 18L12 7L18 18Z");
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "1.6");
+  path.setAttribute("stroke-linejoin", "round");
+  svg.appendChild(path);
+  for (const [cx, cy] of [[6, 18], [18, 18], [12, 7]]) {
+    const c = document.createElementNS(SVGNS, "circle");
+    c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", "2.4");
+    c.setAttribute("fill", "var(--plane)");
+    c.setAttribute("stroke", "currentColor");
+    c.setAttribute("stroke-width", "1.6");
+    svg.appendChild(c);
+  }
+  return svg;
+}
+
+// A colour-coded icon chip. The colour identifies the metric category
+// (cpu/memory/disk/...) and is fixed regardless of theme or severity —
+// severity is still carried separately, by the .sev word next to the
+// value, never by recolouring the badge.
+function badge(name, cls, opts) {
+  const b = el("div", "badge " + cls);
+  b.appendChild(icon(name, opts));
+  return b;
+}
+
+function kpiCard(cls, iconName, iconOpts, label, valueText, opts) {
+  opts = opts || {};
+  const card = el("div", "kpi" + (opts.wide ? " wide" : "") + (opts.severity ? " sev-" + opts.severity : ""));
+  const top = el("div", "kpi-top");
+  top.appendChild(badge(iconName, cls, iconOpts));
+  top.appendChild(el("span", "kpi-label", label));
+  card.appendChild(top);
+  const readout = el("div", "kpi-readout");
+  if (opts.valueNode) readout.appendChild(opts.valueNode);
+  else readout.appendChild(el("span", "kpi-value", valueText));
+  if (opts.severity) readout.appendChild(el("span", "sev " + opts.severity, opts.word || opts.severity));
+  card.appendChild(readout);
+  if (opts.viz) {
+    const viz = el("div", "kpi-viz");
+    viz.appendChild(opts.viz);
+    card.appendChild(viz);
+  }
+  if (opts.note) card.appendChild(el("div", "kpi-note", opts.note));
+  return card;
 }
 
 function batteryReadout(n) {
@@ -451,38 +627,15 @@ function batteryReadout(n) {
   return { text, sev: "", word: "" };
 }
 
-// One 14px glyph per chassis class, drawn on currentColor so it themes with
-// the text beside it. The word is always rendered too — the shape narrows
-// the search, it never carries the meaning alone.
-const GLYPHS = {
-  laptop:       "M3.5 3.5h9v6h-9zM1.5 11h13l-1 1.5h-11z",
-  desktop:      "M4.5 1.5h7v13h-7zM6 3.5h4M6 5.5h4",
-  "mini-pc":    "M1.5 4.5h13v7h-13zM3.5 8h2M11.5 8h1",
-  "all-in-one": "M2.5 2.5h11v8h-11zM6.5 13h3M8 10.5v2.5",
-  server:       "M1.5 2.5h13v4h-13zM1.5 9.5h13v4h-13zM3.5 4.5h1M3.5 11.5h1",
-  sbc:          "M3.5 3.5h9v9h-9zM6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2",
-  embedded:     "M3.5 3.5h9v9h-9zM6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2",
-  tablet:       "M3.5 1.5h9v13h-9zM7 12.5h2",
-  "stick-pc":   "M2.5 6.5h9v3h-9zM11.5 7.5h2v1h-2",
-  vm:           "M2.5 3.5h11v9h-11zM5.5 6.5h5v3h-5",
-  unknown:      "M2.5 3.5h11v9h-11z",
-};
-
-function glyph(cls) {
-  const svg = document.createElementNS(SVGNS, "svg");
-  svg.setAttribute("width", "14");
-  svg.setAttribute("height", "14");
-  svg.setAttribute("viewBox", "0 0 16 16");
-  svg.setAttribute("aria-hidden", "true");
-  const path = document.createElementNS(SVGNS, "path");
-  path.setAttribute("d", GLYPHS[cls] || GLYPHS.unknown);
-  path.setAttribute("fill", "none");
-  path.setAttribute("stroke", "currentColor");
-  path.setAttribute("stroke-width", "1.2");
-  path.setAttribute("stroke-linecap", "round");
-  path.setAttribute("stroke-linejoin", "round");
-  svg.appendChild(path);
-  return svg;
+// Whether the per-node agent has ever reported anything for this node, as
+// opposed to reporting and finding no battery. A node with no agent at all
+// (missing DaemonSet toleration, ImagePullBackOff, ...) gets one tile that
+// says so, rather than two tiles individually shrugging with an em dash —
+// that reads as broken next to a fully-populated card, not as "unknown".
+function hasAgentData(n) {
+  const b = n.battery;
+  return has(n.cpuModel) || has(n.uptimeSeconds) || has(n.tempC) ||
+    (b != null && (has(b.percent) || has(b.acOnline)));
 }
 
 function chevron() {
@@ -526,12 +679,48 @@ function drillPodRow(p) {
   return drillRow(p.name, bits.join(" · "), p.healthy ? "good" : "critical", p.phase);
 }
 
+// One 14px glyph per chassis class, drawn on currentColor so it themes with
+// the badge colour around it. The word is always rendered too — the shape
+// narrows the search, it never carries the meaning alone.
+const GLYPHS = {
+  laptop:       "M3.5 3.5h9v6h-9zM1.5 11h13l-1 1.5h-11z",
+  desktop:      "M4.5 1.5h7v13h-7zM6 3.5h4M6 5.5h4",
+  "mini-pc":    "M1.5 4.5h13v7h-13zM3.5 8h2M11.5 8h1",
+  "all-in-one": "M2.5 2.5h11v8h-11zM6.5 13h3M8 10.5v2.5",
+  server:       "M1.5 2.5h13v4h-13zM1.5 9.5h13v4h-13zM3.5 4.5h1M3.5 11.5h1",
+  sbc:          "M3.5 3.5h9v9h-9zM6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2",
+  embedded:     "M3.5 3.5h9v9h-9zM6 1.5v2M10 1.5v2M6 12.5v2M10 12.5v2M1.5 6h2M1.5 10h2M12.5 6h2M12.5 10h2",
+  tablet:       "M3.5 1.5h9v13h-9zM7 12.5h2",
+  "stick-pc":   "M2.5 6.5h9v3h-9zM11.5 7.5h2v1h-2",
+  vm:           "M2.5 3.5h11v9h-11zM5.5 6.5h5v3h-5",
+  unknown:      "M2.5 3.5h11v9h-11z",
+};
+
+function glyph(cls) {
+  const svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("width", "16");
+  svg.setAttribute("height", "16");
+  svg.setAttribute("viewBox", "0 0 16 16");
+  svg.setAttribute("aria-hidden", "true");
+  const path = document.createElementNS(SVGNS, "path");
+  path.setAttribute("d", GLYPHS[cls] || GLYPHS.unknown);
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "1.2");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  svg.appendChild(path);
+  return svg;
+}
+
 // The device line: what the machine is, in the words someone would use out
 // loud. Unknown parts are dropped rather than dashed — on an identity line
 // a row of em dashes tells you less than a shorter line does.
 function deviceLine(n) {
   const row = el("div", "device");
-  row.appendChild(glyph(n.deviceClass));
+  const b = el("div", "badge identity");
+  b.appendChild(glyph(n.deviceClass));
+  row.appendChild(b);
 
   const model = [n.deviceVendor, n.deviceModel].filter(Boolean).join(" ");
   if (!model && !n.deviceClass) {
@@ -571,6 +760,25 @@ function specLines(n) {
   return [hardware, ops, platform].filter(parts => parts.length).map(parts => parts.join(" · "));
 }
 
+// The worst severity across a node's own metrics, used to accent the
+// card's top border — trouble is visible from the section overview
+// before anyone reads a single number.
+function cardSeverity(n) {
+  if (!n.ready) return "critical";
+  let worst = "";
+  for (const [v, t] of [[n.cpuPercent, THRESHOLDS.cpu], [n.memPercent, THRESHOLDS.mem],
+                        [n.diskPercent, THRESHOLDS.disk], [n.tempC, THRESHOLDS.temp]]) {
+    const sev = level(v, ...t);
+    if (sev === "critical") return "critical";
+    if (sev === "warning") worst = "warning";
+  }
+  if (n.battery && n.battery.status === "Discharging") {
+    if (has(n.battery.percent) && n.battery.percent < 25) return "critical";
+    worst = worst || "warning";
+  }
+  return worst;
+}
+
 // expandedDevices tracks which cards are drilled open, keyed by node name.
 // It lives outside render() because render() rebuilds the whole node list
 // every poll — without state kept elsewhere, an expanded card would
@@ -579,7 +787,8 @@ const expandedDevices = new Set();
 let lastSnapshot = null;
 
 function nodeCard(n, s) {
-  const card = el("div", "card" + (n.ready ? "" : " down"));
+  const sev = cardSeverity(n);
+  const card = el("div", "card" + (sev ? " sev-" + sev : ""));
 
   const title = el("h2");
   title.appendChild(el("span", null, n.displayName || n.name));
@@ -698,54 +907,57 @@ function sortedNodes(nodes) {
   return nodes.slice().sort((a, b) => troubleScore(b) - troubleScore(a) || a.name.localeCompare(b.name));
 }
 
-function fleetPanel(fleet) {
+function fleetKPIs(fleet) {
   const series = fleet.series || {};
-  const hero = el("div", "hero");
-  const figure = el("div", "figure");
-  figure.appendChild(el("span", null, String(fleet.ready)));
-  figure.appendChild(el("span", "of", "/" + fleet.devices));
-  hero.appendChild(figure);
   const down = fleet.devices - fleet.ready;
-  hero.appendChild(el("div", "label", down === 0
-    ? (fleet.devices === 1 ? "device ready" : "devices ready")
-    : down + (down === 1 ? " device is not ready" : " devices are not ready")));
+  const readySev = down > 0 ? "critical" : "";
 
-  const tiles = el("div", "tiles");
+  const readyValue = el("span", "kpi-value");
+  readyValue.appendChild(document.createTextNode(String(fleet.ready)));
+  readyValue.appendChild(el("span", "of", "/" + fleet.devices));
+
+  const cards = [];
+
+  cards.push(kpiCard("devices", "devices", {}, "Devices ready", null, {
+    wide: true, valueNode: readyValue, severity: readySev, word: "not ready",
+    note: down === 0
+      ? (fleet.devices === 1 ? "device ready" : "devices ready")
+      : down + (down === 1 ? " device is not ready" : " devices are not ready"),
+  }));
 
   const cpuSev = level(fleet.cpuPercent, ...THRESHOLDS.cpu);
-  tiles.appendChild(tile("CPU", fmtPct(fleet.cpuPercent), {
+  cards.push(kpiCard("cpu", "cpu", {}, "CPU", fmtPct(fleet.cpuPercent), {
     severity: cpuSev, word: cpuSev === "critical" ? "saturated" : "busy",
     viz: sparkline(series.cpuPercent, "Cluster CPU", "%", { min: 0, max: 100 }),
     note: fleet.cpuCores ? fleet.cpuCores + " cores total" : "",
   }));
 
   const memSev = level(fleet.memPercent, ...THRESHOLDS.mem);
-  tiles.appendChild(tile("Memory", fmtPct(fleet.memPercent), {
+  cards.push(kpiCard("memory", "memory", {}, "Memory", fmtPct(fleet.memPercent), {
     severity: memSev, word: memSev === "critical" ? "near limit" : "high",
     viz: sparkline(series.memPercent, "Cluster memory", "%", { min: 0, max: 100 }),
     note: fleet.memTotalBytes ? fmtBytes(fleet.memTotalBytes) + " total" : "",
   }));
 
   const diskSev = level(fleet.diskPercent, ...THRESHOLDS.disk);
-  tiles.appendChild(tile("Disk", fmtPct(fleet.diskPercent), {
+  cards.push(kpiCard("disk", "disk", {}, "Disk", fmtPct(fleet.diskPercent), {
     severity: diskSev, word: diskSev === "critical" ? "almost full" : "filling",
     viz: sparkline(series.diskPercent, "Cluster disk", "%", { min: 0, max: 100 }),
   }));
 
   const tempSev = level(fleet.hottestC, ...THRESHOLDS.temp);
-  tiles.appendChild(tile("Hottest", fmtTemp(fleet.hottestC), {
+  cards.push(kpiCard("temp", "temp", { circle: [10, 13, 3] }, "Hottest", fmtTemp(fleet.hottestC), {
     severity: tempSev, word: tempSev === "critical" ? "overheating" : "hot",
     viz: sparkline(series.tempC, "Hottest device", "°C"),
     note: fleet.hottestNode || "",
   }));
 
-  const onAC = fleet.devices - fleet.onBattery;
-  tiles.appendChild(tile("Power", fleet.onBattery ? fleet.onBattery + " unplugged" : "all on AC", {
+  cards.push(kpiCard("power", "power", { fill: true }, "Power", fleet.onBattery ? fleet.onBattery + " unplugged" : "all on AC", {
     severity: fleet.onBattery ? "warning" : "", word: "on battery",
-    note: fleet.onBattery ? onAC + " on AC" : "",
+    note: fleet.onBattery ? (fleet.devices - fleet.onBattery) + " on AC" : "",
   }));
 
-  tiles.appendChild(tile("Workloads", fleet.workloadsDegraded
+  cards.push(kpiCard("work", "workloads", {}, "Workloads", fleet.workloadsDegraded
     ? fleet.workloadsDegraded + " of " + fleet.workloadsTotal
     : "all healthy", {
     severity: fleet.workloadsDegraded ? "critical" : "", word: "degraded",
@@ -753,12 +965,27 @@ function fleetPanel(fleet) {
       fleet.workloadsTotal + (fleet.workloadsTotal === 1 ? " workload" : " workloads"),
   }));
 
-  return [hero, tiles];
+  return cards;
+}
+
+function alertCard(e) {
+  const li = el("li", "alert");
+  const iconWrap = el("div", "alert-icon");
+  iconWrap.appendChild(icon("warning", { fill: true }));
+  li.appendChild(iconWrap);
+  const body = el("div", "alert-body");
+  const head = el("div", "alert-head");
+  head.appendChild(el("strong", null, e.reason));
+  head.appendChild(el("span", "muted", e.namespace + "/" + e.object + (e.count > 1 ? " ×" + e.count : "")));
+  body.appendChild(head);
+  body.appendChild(el("div", "msg", e.message));
+  li.appendChild(body);
+  return li;
 }
 
 function render(s) {
   lastSnapshot = s;
-  document.getElementById("fleet").replaceChildren(...fleetPanel(s.fleet));
+  document.getElementById("kpis").replaceChildren(...fleetKPIs(s.fleet));
 
   const nodes = sortedNodes(s.nodes);
   document.getElementById("nodes").replaceChildren(...nodes.map(n => nodeCard(n, s)));
@@ -770,16 +997,7 @@ function render(s) {
 
   const events = document.getElementById("events");
   if (s.events.length) {
-    events.replaceChildren(...s.events.map(e => {
-      const li = el("li");
-      const head = el("div");
-      head.appendChild(el("strong", null, e.reason));
-      head.appendChild(el("span", "muted", "  " + e.namespace + "/" + e.object +
-        (e.count > 1 ? "  ×" + e.count : "")));
-      li.appendChild(head);
-      li.appendChild(el("div", "msg", e.message));
-      return li;
-    }));
+    events.replaceChildren(...s.events.map(alertCard));
   } else {
     events.replaceChildren(el("li", "empty", "No warnings in the last hour."));
   }
@@ -801,7 +1019,9 @@ function render(s) {
   // the API server is unreachable. What is on screen is then history, not
   // status, and the page has to say so.
   const maxAge = 4 * (s.meta.sampleIntervalSeconds || 15);
-  if (!first && age > maxAge) {
+  const stale = !first && age > maxAge;
+  document.getElementById("live").classList.toggle("stale", stale || first);
+  if (stale) {
     notes.push("Stale: last successful sample was " +
       (age < 120 ? age + "s" : Math.round(age / 60) + "m") +
       " ago, so these numbers may no longer be current.");
@@ -837,6 +1057,32 @@ function initDensity() {
   document.getElementById("density-detailed").addEventListener("click", () => applyDensity("detailed"));
 }
 
+// Theme is also a viewing preference: "Auto" removes the override and lets
+// prefers-color-scheme decide, matching the two dark-mode CSS scopes this
+// page has always shipped. Badge colours are theme-invariant, but the
+// sparkline stroke reads off CSS vars, so a re-render on toggle is what
+// makes the switch feel instant rather than waiting for the next poll.
+const THEME_KEY = "k3s-dash.theme";
+
+function applyTheme(mode) {
+  if (mode === "light" || mode === "dark") document.documentElement.setAttribute("data-theme", mode);
+  else document.documentElement.removeAttribute("data-theme");
+  for (const m of ["auto", "light", "dark"]) {
+    document.getElementById("theme-" + m).setAttribute("aria-pressed", String(m === mode));
+  }
+  try { localStorage.setItem(THEME_KEY, mode); } catch (err) { /* not fatal */ }
+  if (lastSnapshot) render(lastSnapshot);
+}
+
+function initTheme() {
+  let saved = "auto";
+  try { saved = localStorage.getItem(THEME_KEY) || "auto"; } catch (err) { /* not fatal */ }
+  applyTheme(saved);
+  document.getElementById("theme-auto").addEventListener("click", () => applyTheme("auto"));
+  document.getElementById("theme-light").addEventListener("click", () => applyTheme("light"));
+  document.getElementById("theme-dark").addEventListener("click", () => applyTheme("dark"));
+}
+
 async function tick() {
   const main = document.getElementById("main");
   try {
@@ -848,10 +1094,13 @@ async function tick() {
     // Hold the previous render rather than blanking the page.
     main.classList.add("stale");
     document.getElementById("stamp").textContent = "dashboard unreachable — retrying";
+    document.getElementById("live").classList.add("stale");
   }
 }
 
+document.getElementById("logo").appendChild(logoMark());
 initDensity();
+initTheme();
 tick();
 setInterval(tick, 5000);
 </script>

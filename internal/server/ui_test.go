@@ -142,14 +142,14 @@ func TestEveryChassisClassHasAGlyph(t *testing.T) {
 	}
 }
 
-// The fleet strip is what makes ten devices readable, so the page has to
-// actually consume it.
+// The overview KPI row is what makes ten devices readable, so the page has
+// to actually consume it.
 func TestPageRendersTheFleetSummary(t *testing.T) {
 	keys := marshalledKeys(t, state.Fleet{})
 	page := string(uiHTML)
 
-	if !strings.Contains(page, `id="fleet"`) {
-		t.Error("page is missing the fleet strip")
+	if !strings.Contains(page, `id="kpis"`) {
+		t.Error("page is missing the overview KPI row")
 	}
 	for _, field := range []string{
 		"devices", "ready", "onBattery", "pods", "workloadsDegraded",
@@ -180,6 +180,27 @@ func TestPageOffersADensityToggle(t *testing.T) {
 	// would be a poor trade.
 	if !strings.Contains(page, "try { localStorage") {
 		t.Error("page reads localStorage without a guard; it throws in a private window")
+	}
+}
+
+// A dashboard people actually look at needs a manual override of
+// prefers-color-scheme, not just the OS default — someone reading it on a
+// dim laptop in daylight shouldn't have to change their whole OS setting.
+func TestPageOffersAThemeToggle(t *testing.T) {
+	page := string(uiHTML)
+	for _, required := range []string{`id="theme-auto"`, `id="theme-light"`, `id="theme-dark"`, "aria-pressed"} {
+		if !strings.Contains(page, required) {
+			t.Errorf("page is missing %q from the theme toggle", required)
+		}
+	}
+	if !strings.Contains(page, "try { localStorage") {
+		t.Error("page reads localStorage without a guard; it throws in a private window")
+	}
+	// "Light"/"Dark" pick a data-theme scope directly; "Auto" has to clear
+	// that override rather than set a third value, or prefers-color-scheme
+	// can never take back over once someone has touched the toggle.
+	if !strings.Contains(page, "removeAttribute(\"data-theme\")") {
+		t.Error("page never clears data-theme, so Auto cannot hand control back to the OS setting")
 	}
 }
 
