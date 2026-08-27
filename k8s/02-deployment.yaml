@@ -25,7 +25,7 @@ spec:
         - name: ghcr-creds
       containers:
         - name: k3s-dash
-          image: ghcr.io/wkn00/k3s-dash:0.7.0
+          image: ghcr.io/wkn00/k3s-dash:0.7.1
           args: ["server", "--addr=:8080"]
           env:
             - name: POD_NAMESPACE
