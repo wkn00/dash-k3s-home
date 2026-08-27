@@ -204,17 +204,17 @@ func TestPageOffersAThemeToggle(t *testing.T) {
 	}
 }
 
-// The placement answer — which device a pod is actually on — now lives in
-// each device card's drill-down rather than a standalone table, so it has
-// to read every field state.Pod marshals, the same way the node card is
-// checked against state.Node.
+// The placement answer — which device a pod is actually on — lives in the
+// device's pop-out modal rather than a standalone table, so it has to read
+// every field state.Pod marshals, the same way the node card is checked
+// against state.Node.
 func TestPageRendersPodPlacement(t *testing.T) {
 	keys := marshalledKeys(t, state.Pod{})
 	page := string(uiHTML)
 
-	for _, required := range []string{"drill-toggle", "drill-list", "drill-scroll"} {
+	for _, required := range []string{"drill-list", "drill-row", `id="device-modal"`} {
 		if !strings.Contains(page, required) {
-			t.Errorf("page is missing %q, the device drill-down", required)
+			t.Errorf("page is missing %q, the device pop-out", required)
 		}
 	}
 	for _, field := range []string{"namespace", "name", "node", "phase", "healthy", "restarts", "createdAt", "workload"} {
@@ -223,22 +223,23 @@ func TestPageRendersPodPlacement(t *testing.T) {
 			continue
 		}
 		if !strings.Contains(page, "."+field) {
-			t.Errorf("page never reads p.%s, so the drill-down is missing it", field)
+			t.Errorf("page never reads p.%s, so the pop-out is missing it", field)
 		}
 	}
 }
 
-// Clicking a device is how you find out what's running on it — the whole
-// point of this redesign — so the toggle has to actually be wired up, and
-// the expand state has to survive the next poll's re-render rather than
-// snapping shut on its own.
-func TestDeviceCardsExpandToShowWorkloadsAndPods(t *testing.T) {
+// Clicking anywhere on a device card is how you find out what's running on
+// it — not a small button inside it — so the whole card has to be wired up
+// as a real, keyboard-operable trigger for the pop-out, not just a div with
+// a click handler nothing else can reach.
+func TestDeviceCardsOpenAPopOutOnClick(t *testing.T) {
 	page := string(uiHTML)
 	for _, required := range []string{
-		"expandedDevices", "aria-expanded", "addEventListener(\"click\"",
+		`class="device-modal"`, "showModal()", "role\", \"button\"", "tabindex", "keydown",
+		"e.key === \"Enter\"",
 	} {
 		if !strings.Contains(page, required) {
-			t.Errorf("page is missing %q from the device drill-down toggle", required)
+			t.Errorf("page is missing %q from the device card's pop-out trigger", required)
 		}
 	}
 }

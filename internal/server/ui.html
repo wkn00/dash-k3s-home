@@ -249,33 +249,56 @@
   .detailed .stats .note    { order: 4; grid-column: 2 / -1; }
   .detailed .cards { grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); }
 
-  /* The drill-down toggle is a real button, not a link-styled row — it has
-     to look clickable at a glance, since it's the whole answer to "what's
-     running on this device". */
-  .drill-toggle {
-    display: flex; align-items: center; gap: 7px; width: 100%; margin-top: 12px;
-    border: 0; background: var(--surface-2); border-radius: 9px; padding: 8px 11px;
-    font: inherit; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); cursor: pointer; text-align: left;
+  /* The whole card is the click target for its pop-out modal, so it needs
+     its own hover/focus affordance rather than a small button's. */
+  .card.clickable { cursor: pointer; }
+  .card.clickable:hover, .card.clickable:focus-visible {
+    border-color: var(--accent); outline: none;
   }
-  .drill-toggle:hover { background: var(--accent-bg); color: var(--accent); }
-  .drill-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .drill-toggle .count {
+  .card.clickable:focus-visible { box-shadow: var(--shadow), 0 0 0 2px var(--accent-bg); }
+  .drill-hint {
+    display: flex; align-items: center; gap: 7px; margin-top: 12px;
+    background: var(--surface-2); border-radius: 9px; padding: 8px 11px;
+    font-size: 12.5px; font-weight: 600; color: var(--text-secondary);
+  }
+  .card.clickable:hover .drill-hint, .card.clickable:focus-visible .drill-hint {
+    background: var(--accent-bg); color: var(--accent);
+  }
+  .drill-hint .count {
     margin-left: auto; font-size: 11px; color: inherit; opacity: .75; font-variant-numeric: tabular-nums;
     background: var(--surface-1); border-radius: 999px; padding: 1px 7px;
   }
-  .drill-toggle .chev { flex: none; color: inherit; opacity: .7; transition: transform .15s ease; }
-  .drill-toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
 
-  .drill { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
-  .drill h4 {
+  /* The pop-out itself: a native <dialog>, so Escape-to-close, the
+     backdrop and focus trapping all come for free instead of being
+     hand-rolled and hand-debugged. */
+  .device-modal {
+    border: 1px solid var(--border); border-radius: 14px; padding: 0;
+    background: var(--surface-1); color: var(--text-primary); box-shadow: var(--shadow);
+    width: min(560px, 92vw); max-height: 82vh;
+  }
+  .device-modal::backdrop { background: rgba(10, 10, 10, 0.5); }
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 15px 18px; border-bottom: 1px solid var(--grid);
+  }
+  .modal-head h3 {
+    margin: 0; font-size: 14.5px; font-weight: 700; letter-spacing: normal;
+    text-transform: none; color: var(--text-primary);
+  }
+  .modal-close {
+    flex: none; border: 0; background: var(--surface-2); color: var(--text-secondary);
+    width: 28px; height: 28px; border-radius: 8px; cursor: pointer; font-size: 18px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-close:hover { background: var(--accent-bg); color: var(--accent); }
+  .modal-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .modal-body { padding: 6px 18px 18px; overflow-y: auto; max-height: calc(82vh - 58px); }
+  .modal-body h4 {
     font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em;
-    color: var(--text-muted); margin: 0; font-weight: 600;
+    color: var(--text-muted); margin: 14px 0 0; font-weight: 600;
   }
   .drill-list { list-style: none; margin: 4px 0 0; padding: 0; }
-  /* A device with dozens of pods must not make the whole card that tall —
-     the list scrolls in place instead of pushing every card below it down
-     the page. */
-  .drill-list.drill-scroll { max-height: 220px; overflow-y: auto; }
   .drill-row {
     display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
     padding: 5px 0; border-bottom: 1px solid var(--grid); font-size: 12.5px;
@@ -339,6 +362,13 @@
     <ul class="events" id="events"></ul>
   </section>
 </main>
+<dialog class="device-modal" id="device-modal">
+  <div class="modal-head">
+    <h3 id="modal-title"></h3>
+    <button type="button" class="modal-close" id="modal-close" aria-label="Close">&times;</button>
+  </div>
+  <div class="modal-body" id="modal-body"></div>
+</dialog>
 <script>
 const SVGNS = "http://www.w3.org/2000/svg";
 
@@ -638,24 +668,6 @@ function hasAgentData(n) {
     (b != null && (has(b.percent) || has(b.acOnline)));
 }
 
-function chevron() {
-  const svg = document.createElementNS(SVGNS, "svg");
-  svg.setAttribute("width", "10");
-  svg.setAttribute("height", "10");
-  svg.setAttribute("viewBox", "0 0 10 10");
-  svg.setAttribute("aria-hidden", "true");
-  svg.classList.add("chev");
-  const path = document.createElementNS(SVGNS, "path");
-  path.setAttribute("d", "M2 3.5l3 3 3-3");
-  path.setAttribute("fill", "none");
-  path.setAttribute("stroke", "currentColor");
-  path.setAttribute("stroke-width", "1.4");
-  path.setAttribute("stroke-linecap", "round");
-  path.setAttribute("stroke-linejoin", "round");
-  svg.appendChild(path);
-  return svg;
-}
-
 // One row shape for both lists in a device's drill-down: a primary label,
 // an optional muted meta line under it, and a status pill pinned right.
 function drillRow(primary, meta, pillClass, pillText) {
@@ -779,11 +791,9 @@ function cardSeverity(n) {
   return worst;
 }
 
-// expandedDevices tracks which cards are drilled open, keyed by node name.
-// It lives outside render() because render() rebuilds the whole node list
-// every poll — without state kept elsewhere, an expanded card would
-// collapse itself on the next 5s tick.
-const expandedDevices = new Set();
+// lastSnapshot lets a click handler (theme toggle, device modal) re-render
+// immediately with the data already on screen, rather than waiting for the
+// next 5s poll.
 let lastSnapshot = null;
 
 function nodeCard(n, s) {
@@ -844,44 +854,63 @@ function nodeCard(n, s) {
 
   card.appendChild(stats);
 
+  // The whole card is the click target — not just a small button — so the
+  // hint at the bottom is a visual affordance only; it carries no handler
+  // of its own and just lets the card's click bubble up to it.
   if (n.podCount > 0) {
-    const devicePods = s.pods.filter(p => p.node === n.name);
-    const ownerKeys = new Set(
-      devicePods.filter(p => p.workload).map(p => p.namespace + "/" + p.workload)
-    );
-    const deviceWorkloads = s.workloads.filter(w => ownerKeys.has(w.namespace + "/" + w.name));
-    const expanded = expandedDevices.has(n.name);
-
-    const toggle = el("button", "drill-toggle");
-    toggle.type = "button";
-    toggle.setAttribute("aria-expanded", String(expanded));
-    toggle.appendChild(chevron());
-    toggle.appendChild(el("span", null, "Workloads & pods"));
-    toggle.appendChild(el("span", "count", String(n.podCount)));
-    toggle.addEventListener("click", () => {
-      if (expandedDevices.has(n.name)) expandedDevices.delete(n.name);
-      else expandedDevices.add(n.name);
-      if (lastSnapshot) render(lastSnapshot);
+    card.classList.add("clickable");
+    card.setAttribute("role", "button");
+    card.setAttribute("tabindex", "0");
+    card.setAttribute("aria-haspopup", "dialog");
+    card.setAttribute("aria-label", "View workloads and pods on " + (n.displayName || n.name));
+    card.addEventListener("click", () => openDeviceModal(n, s));
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDeviceModal(n, s); }
     });
-    card.appendChild(toggle);
 
-    if (expanded) {
-      const drill = el("div", "drill");
-      if (deviceWorkloads.length) {
-        drill.appendChild(el("h4", null, "Workloads (" + deviceWorkloads.length + ")"));
-        const wl = el("ul", "drill-list");
-        wl.replaceChildren(...deviceWorkloads.map(drillWorkloadRow));
-        drill.appendChild(wl);
-      }
-      drill.appendChild(el("h4", null, "Pods (" + devicePods.length + ")"));
-      const pl = el("ul", "drill-list drill-scroll");
-      pl.replaceChildren(...devicePods.map(drillPodRow));
-      drill.appendChild(pl);
-      card.appendChild(drill);
-    }
+    const hint = el("div", "drill-hint");
+    hint.appendChild(el("span", null, "Workloads & pods"));
+    hint.appendChild(el("span", "count", String(n.podCount)));
+    card.appendChild(hint);
   }
 
   return card;
+}
+
+// The device modal is one shared <dialog>, filled in fresh per click —
+// native showModal()/close() give us the backdrop, Escape-to-close and
+// focus trapping for free, so there's no custom overlay to get wrong.
+function openDeviceModal(n, s) {
+  const devicePods = s.pods.filter(p => p.node === n.name);
+  const ownerKeys = new Set(
+    devicePods.filter(p => p.workload).map(p => p.namespace + "/" + p.workload)
+  );
+  const deviceWorkloads = s.workloads.filter(w => ownerKeys.has(w.namespace + "/" + w.name));
+
+  document.getElementById("modal-title").textContent = n.displayName || n.name;
+  const body = document.getElementById("modal-body");
+  body.replaceChildren();
+  if (deviceWorkloads.length) {
+    body.appendChild(el("h4", null, "Workloads (" + deviceWorkloads.length + ")"));
+    const wl = el("ul", "drill-list");
+    wl.replaceChildren(...deviceWorkloads.map(drillWorkloadRow));
+    body.appendChild(wl);
+  }
+  body.appendChild(el("h4", null, "Pods (" + devicePods.length + ")"));
+  const pl = el("ul", "drill-list");
+  pl.replaceChildren(...devicePods.map(drillPodRow));
+  body.appendChild(pl);
+
+  document.getElementById("device-modal").showModal();
+}
+
+// Clicking the dialog's own backdrop area lands a click on the <dialog>
+// element itself, never on a child — that's what tells a real backdrop
+// click apart from a click inside the modal body.
+function initDeviceModal() {
+  const modal = document.getElementById("device-modal");
+  modal.addEventListener("click", e => { if (e.target === modal) modal.close(); });
+  document.getElementById("modal-close").addEventListener("click", () => modal.close());
 }
 
 // Trouble first. The sort lives here rather than in the server because it
@@ -1101,6 +1130,7 @@ async function tick() {
 document.getElementById("logo").appendChild(logoMark());
 initDensity();
 initTheme();
+initDeviceModal();
 tick();
 setInterval(tick, 5000);
 </script>
