@@ -25,6 +25,8 @@
     --accent:         #2a78d6;
     --accent-soft:    #86b6ef;
     --accent-bg:      rgba(42, 120, 214, 0.11);
+    --accent-deep:    #1d4fb8;
+    --accent-shadow:  rgba(42, 120, 214, 0.38);
     --track:          #e4e9ee;
     --good:           #0ca34f;
     --good-bg:        rgba(12, 163, 79, 0.12);
@@ -58,6 +60,8 @@
       --accent:         #4f97ea;
       --accent-soft:    #1c5cab;
       --accent-bg:      rgba(79, 151, 234, 0.16);
+      --accent-deep:    #2c56b3;
+      --accent-shadow:  rgba(79, 151, 234, 0.4);
       --track:          #23262a;
       --shadow:         0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 18px rgba(0, 0, 0, 0.32);
     }
@@ -75,6 +79,8 @@
     --accent:         #4f97ea;
     --accent-soft:    #1c5cab;
     --accent-bg:      rgba(79, 151, 234, 0.16);
+    --accent-deep:    #2c56b3;
+    --accent-shadow:  rgba(79, 151, 234, 0.4);
     --track:          #23262a;
     --shadow:         0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 18px rgba(0, 0, 0, 0.32);
   }
@@ -95,10 +101,14 @@
   /* A solid monogram, not a tinted badge like the KPI icons — a logo reads
      as an identity mark, not one more category chip. */
   .logo-mark {
-    flex: none; width: 32px; height: 32px; border-radius: 9px;
-    background: var(--accent); color: #fff;
+    flex: none; width: 36px; height: 36px; border-radius: 11px;
+    background: linear-gradient(155deg, var(--accent) 12%, var(--accent-deep) 100%);
+    color: #fff;
     display: flex; align-items: center; justify-content: center;
-    font-size: 12.5px; font-weight: 800; letter-spacing: -0.02em;
+    font-size: 13px; font-weight: 800; letter-spacing: -0.03em;
+    text-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), inset 0 -1px 1px rgba(0, 0, 0, 0.12),
+      0 3px 8px var(--accent-shadow);
   }
   .brand h1 { font-size: 16px; margin: 0; letter-spacing: -0.01em; font-weight: 700; line-height: 1.2; }
   .brand .tagline { font-size: 11.5px; color: var(--text-muted); }
@@ -321,10 +331,15 @@
   .empty { color: var(--text-muted); font-size: 13px; padding: 10px 2px; }
 
   .site-footer {
-    max-width: 1600px; margin: 6px auto 0; padding: 18px 24px 26px;
-    border-top: 1px solid var(--border); text-align: center;
-    font-size: 12px; color: var(--text-muted);
+    max-width: 1600px; margin: 10px auto 0; padding: 0 24px 30px;
+    text-align: center; font-size: 11.5px; letter-spacing: .02em; color: var(--text-muted);
   }
+  .footer-rule {
+    display: block; width: 36px; height: 2px; margin: 0 auto 16px;
+    border-radius: 2px; background: linear-gradient(90deg, var(--accent), var(--accent-deep));
+    opacity: .5;
+  }
+  .footer-name { color: var(--text-secondary); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -367,7 +382,10 @@
     <ul class="events" id="events"></ul>
   </section>
 </main>
-<footer class="site-footer">Built by Wael</footer>
+<footer class="site-footer">
+  <span class="footer-rule" aria-hidden="true"></span>
+  Built by <span class="footer-name">Wael</span>
+</footer>
 <dialog class="device-modal" id="device-modal">
   <div class="modal-head">
     <h3 id="modal-title"></h3>
