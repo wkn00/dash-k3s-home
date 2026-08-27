@@ -99,6 +99,9 @@
     font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
     color: var(--text-muted); margin: 0 0 10px; font-weight: 600;
   }
+  .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  .section-head h3 { margin-bottom: 0; }
+  .section-note { font-size: 12px; color: var(--text-muted); }
   .grow { flex: 1 1 auto; }
   .muted { color: var(--text-secondary); font-size: 12px; }
   /* The spec is context rather than status, so it sits a step further
@@ -256,18 +259,6 @@
     border-color: var(--accent); outline: none;
   }
   .card.clickable:focus-visible { box-shadow: var(--shadow), 0 0 0 2px var(--accent-bg); }
-  .drill-hint {
-    display: flex; align-items: center; gap: 7px; margin-top: 12px;
-    background: var(--surface-2); border-radius: 9px; padding: 8px 11px;
-    font-size: 12.5px; font-weight: 600; color: var(--text-secondary);
-  }
-  .card.clickable:hover .drill-hint, .card.clickable:focus-visible .drill-hint {
-    background: var(--accent-bg); color: var(--accent);
-  }
-  .drill-hint .count {
-    margin-left: auto; font-size: 11px; color: inherit; opacity: .75; font-variant-numeric: tabular-nums;
-    background: var(--surface-1); border-radius: 999px; padding: 1px 7px;
-  }
 
   /* The pop-out itself: a native <dialog>, so Escape-to-close, the
      backdrop and focus trapping all come for free instead of being
@@ -354,7 +345,10 @@
     <div class="kpis" id="kpis"></div>
   </section>
   <section>
-    <h3 id="devices-heading">Devices</h3>
+    <div class="section-head">
+      <h3 id="devices-heading">Devices</h3>
+      <span class="section-note" id="devices-meta"></span>
+    </div>
     <div class="cards" id="nodes"></div>
   </section>
   <section>
@@ -854,9 +848,8 @@ function nodeCard(n, s) {
 
   card.appendChild(stats);
 
-  // The whole card is the click target — not just a small button — so the
-  // hint at the bottom is a visual affordance only; it carries no handler
-  // of its own and just lets the card's click bubble up to it.
+  // The whole card is the click target for its workloads/pods pop-out —
+  // no button, no visible hint row, just the card itself.
   if (n.podCount > 0) {
     card.classList.add("clickable");
     card.setAttribute("role", "button");
@@ -867,11 +860,6 @@ function nodeCard(n, s) {
     card.addEventListener("keydown", (e) => {
       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDeviceModal(n, s); }
     });
-
-    const hint = el("div", "drill-hint");
-    hint.appendChild(el("span", null, "Workloads & pods"));
-    hint.appendChild(el("span", "count", String(n.podCount)));
-    card.appendChild(hint);
   }
 
   return card;
@@ -1020,6 +1008,9 @@ function render(s) {
   document.getElementById("nodes").replaceChildren(...nodes.map(n => nodeCard(n, s)));
   document.getElementById("devices-heading").textContent =
     nodes.length === 1 ? "Device" : nodes.length + " devices";
+  document.getElementById("devices-meta").textContent =
+    s.fleet.pods + (s.fleet.pods === 1 ? " pod" : " pods") + " across " +
+    s.fleet.workloadsTotal + (s.fleet.workloadsTotal === 1 ? " workload" : " workloads");
 
   document.getElementById("events-heading").textContent =
     "Warnings, last hour" + (s.events.length ? " (" + s.events.length + ")" : "");
