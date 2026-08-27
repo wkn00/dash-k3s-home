@@ -25,7 +25,6 @@ func TestPageIsSelfContained(t *testing.T) {
 		"/api/state",
 		"prefers-color-scheme",
 		`id="nodes"`,
-		`id="workloads"`,
 		`id="events"`,
 		`id="degraded"`,
 	} {
@@ -184,23 +183,41 @@ func TestPageOffersADensityToggle(t *testing.T) {
 	}
 }
 
-// The pods table is the placement answer — which device a pod is actually
-// on — so it has to read every field state.Pod marshals, the same way the
-// node card is checked against state.Node.
+// The placement answer — which device a pod is actually on — now lives in
+// each device card's drill-down rather than a standalone table, so it has
+// to read every field state.Pod marshals, the same way the node card is
+// checked against state.Node.
 func TestPageRendersPodPlacement(t *testing.T) {
 	keys := marshalledKeys(t, state.Pod{})
 	page := string(uiHTML)
 
-	if !strings.Contains(page, `id="pods"`) {
-		t.Error("page is missing the pods table body")
+	for _, required := range []string{"drill-toggle", "drill-list", "drill-scroll"} {
+		if !strings.Contains(page, required) {
+			t.Errorf("page is missing %q, the device drill-down", required)
+		}
 	}
-	for _, field := range []string{"namespace", "name", "node", "phase", "healthy", "restarts", "createdAt"} {
+	for _, field := range []string{"namespace", "name", "node", "phase", "healthy", "restarts", "createdAt", "workload"} {
 		if _, ok := keys[field]; !ok {
 			t.Errorf("state.Pod no longer marshals %q — the page cannot render it", field)
 			continue
 		}
 		if !strings.Contains(page, "."+field) {
-			t.Errorf("page never reads p.%s, so the pods table is missing it", field)
+			t.Errorf("page never reads p.%s, so the drill-down is missing it", field)
+		}
+	}
+}
+
+// Clicking a device is how you find out what's running on it — the whole
+// point of this redesign — so the toggle has to actually be wired up, and
+// the expand state has to survive the next poll's re-render rather than
+// snapping shut on its own.
+func TestDeviceCardsExpandToShowWorkloadsAndPods(t *testing.T) {
+	page := string(uiHTML)
+	for _, required := range []string{
+		"expandedDevices", "aria-expanded", "addEventListener(\"click\"",
+	} {
+		if !strings.Contains(page, required) {
+			t.Errorf("page is missing %q from the device drill-down toggle", required)
 		}
 	}
 }

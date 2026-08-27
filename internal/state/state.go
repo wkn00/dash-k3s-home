@@ -80,6 +80,10 @@ type Pod struct {
 	Healthy   bool      `json:"healthy"`
 	Restarts  int       `json:"restarts"`
 	CreatedAt time.Time `json:"createdAt"`
+	// Workload is the owning Deployment/StatefulSet's name, found by the
+	// same selector match that attributes restarts below — empty for a
+	// pod nothing in raw.Workloads claims, e.g. most kube-system pods.
+	Workload string `json:"workload"`
 }
 
 type Event struct {
@@ -226,6 +230,13 @@ func Assemble(raw collect.Raw, buffers *ring.Set, interval time.Duration) Snapsh
 	// give: a Deployment's ready count says nothing about which of ten
 	// devices its replicas actually landed on.
 	for _, pod := range raw.Pods {
+		var owner string
+		for _, kw := range raw.Workloads {
+			if pod.Namespace == kw.Namespace && kube.MatchesSelector(pod.Labels, kw.Selector) {
+				owner = kw.Name
+				break
+			}
+		}
 		snap.Pods = append(snap.Pods, Pod{
 			Namespace: pod.Namespace,
 			Name:      pod.Name,
@@ -234,6 +245,7 @@ func Assemble(raw collect.Raw, buffers *ring.Set, interval time.Duration) Snapsh
 			Healthy:   pod.Phase == "Running" || pod.Phase == "Succeeded",
 			Restarts:  pod.Restarts,
 			CreatedAt: pod.CreatedAt,
+			Workload:  owner,
 		})
 	}
 	sort.Slice(snap.Pods, func(i, j int) bool {

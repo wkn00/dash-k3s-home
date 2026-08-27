@@ -108,18 +108,6 @@
     border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow);
   }
 
-  /* The lower half of the page used to be one narrow column stacked to the
-     floor — correct, but on a wide monitor it left most of the row empty
-     under three cards' worth of device grid. Panels put that width to
-     work; auto-fit collapses back to one column once there isn't room for
-     a second. */
-  .panels { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
-  .panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  /* A panel that grows to hundreds of pods must not stretch its row and
-     strand a three-line warnings panel in whitespace beside it — the cap
-     scrolls the panel instead of the page. */
-  .panel-scroll { max-height: 420px; overflow-y: auto; }
-
   /* The fleet strip. At ten devices the first question is "is anything
      wrong?", and scanning ten cards to answer it is the wrong way round. */
   .fleet { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: center; }
@@ -203,38 +191,40 @@
   .detailed .stats .note    { order: 4; grid-column: 2 / -1; }
   .detailed .cards { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
 
-  .wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
-  /* Fixed layout plus a colgroup on each table is what actually makes a
-     long identifier wrap instead of scroll: auto layout sizes columns to
-     their unwrapped content first and only wraps once nothing else can
-     shrink, which in a narrow panel means never. */
-  table { width: 100%; border-collapse: collapse; background: var(--surface-1); table-layout: fixed; }
-  th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--grid); font-size: 13px; }
-  /* A pod or namespace name is an identifier, not prose — it wraps instead
-     of forcing the row past the panel width and pushing the status column
-     out of view, the same trade the device model line already makes.
-     Headers are our own short vocabulary, sized by the colgroups below to
-     fit unwrapped at panel widths — the mobile breakpoint further down
-     covers the width they don't fit. */
-  td { overflow-wrap: anywhere; }
-  /* A fixed 6-column layout has nowhere left to give on a phone-width
-     single column — every header would wrap onto three lines to stay
-     inside it. Letting the table size to its natural, unwrapped content
-     and scroll sideways in .wrap reads better there than that. */
-  @media (max-width: 640px) {
-    .panel-scroll table { table-layout: auto; width: auto; min-width: 100%; }
-    .panel-scroll col { width: auto !important; }
-    .panel-scroll th, .panel-scroll td { white-space: nowrap; }
+  /* The drill-down toggle sits where the card's border already ends, so it
+     reads as "there's more below the fold" rather than a bolted-on button. */
+  .drill-toggle {
+    display: flex; align-items: center; gap: 7px; width: 100%; margin-top: 11px; padding-top: 11px;
+    border: 0; border-top: 1px solid var(--grid); background: none; font: inherit; font-size: 12.5px;
+    color: var(--text-secondary); cursor: pointer; text-align: left;
   }
-  th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 600; }
-  /* Sticky only matters once .panel-scroll caps the height and the table
-     grows past it — a header worth scrolling to find defeats the point of
-     a table. */
-  .panel-scroll th { position: sticky; top: 0; background: var(--surface-1); }
-  tr:last-child td { border-bottom: none; }
-  /* Columns of numbers align vertically, so these do get tabular figures. */
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  td.state { white-space: nowrap; }
+  .drill-toggle:hover { color: var(--text-primary); }
+  .drill-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .drill-toggle .count {
+    margin-left: auto; font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums;
+  }
+  .drill-toggle .chev { flex: none; color: var(--text-muted); transition: transform .15s ease; }
+  .drill-toggle[aria-expanded="true"] .chev { transform: rotate(180deg); }
+
+  .drill { margin-top: 9px; display: flex; flex-direction: column; gap: 10px; }
+  .drill h4 {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--text-muted); margin: 0; font-weight: 600;
+  }
+  .drill-list { list-style: none; margin: 4px 0 0; padding: 0; }
+  /* A device with dozens of pods must not make the whole card that tall —
+     the list scrolls in place instead of pushing every card below it down
+     the page. */
+  .drill-list.drill-scroll { max-height: 220px; overflow-y: auto; }
+  .drill-row {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+    padding: 5px 0; border-bottom: 1px solid var(--grid); font-size: 12.5px;
+  }
+  .drill-row:last-child { border-bottom: none; }
+  .drill-row .main { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .drill-row .name { overflow-wrap: anywhere; }
+  .drill-row .meta { font-size: 11px; color: var(--text-muted); overflow-wrap: anywhere; }
+  .drill-row .pill { flex: none; }
 
   ul.events { list-style: none; margin: 0; padding: 0; }
   ul.events li { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 9px 12px; margin-bottom: 8px; }
@@ -259,40 +249,10 @@
     <h3 id="devices-heading">Devices</h3>
     <div class="cards" id="nodes"></div>
   </section>
-  <div class="panels">
-    <section class="panel">
-      <h3 id="workloads-heading">Workloads</h3>
-      <div class="wrap panel-scroll"><table>
-        <colgroup>
-          <col style="width:18%"><col style="width:22%"><col style="width:14%">
-          <col style="width:10%"><col style="width:18%"><col style="width:18%">
-        </colgroup>
-        <thead><tr>
-          <th>Namespace</th><th>Name</th><th>Kind</th>
-          <th class="num">Ready</th><th class="num">Restarts</th><th>State</th>
-        </tr></thead>
-        <tbody id="workloads"></tbody>
-      </table></div>
-    </section>
-    <section class="panel">
-      <h3 id="pods-heading">Pods</h3>
-      <div class="wrap panel-scroll"><table>
-        <colgroup>
-          <col style="width:12%"><col style="width:18%"><col style="width:22%">
-          <col style="width:16%"><col style="width:10%"><col style="width:22%">
-        </colgroup>
-        <thead><tr>
-          <th>Node</th><th>Namespace</th><th>Pod</th>
-          <th class="num">Restarts</th><th>Age</th><th>Status</th>
-        </tr></thead>
-        <tbody id="pods"></tbody>
-      </table></div>
-    </section>
-    <section class="panel">
-      <h3 id="events-heading">Warnings, last hour</h3>
-      <div class="panel-scroll"><ul class="events" id="events"></ul></div>
-    </section>
-  </div>
+  <section>
+    <h3 id="events-heading">Warnings, last hour</h3>
+    <ul class="events" id="events"></ul>
+  </section>
 </main>
 <script>
 const SVGNS = "http://www.w3.org/2000/svg";
@@ -463,6 +423,17 @@ function tile(label, valueText, opts) {
   return box;
 }
 
+// Whether the per-node agent has ever reported anything for this node, as
+// opposed to reporting and finding no battery. A node with no agent at all
+// (missing DaemonSet toleration, ImagePullBackOff, ...) gets one tile that
+// says so, rather than two tiles individually shrugging with an em dash —
+// that reads as broken next to a fully-populated card, not as "unknown".
+function hasAgentData(n) {
+  const b = n.battery;
+  return has(n.cpuModel) || has(n.uptimeSeconds) || has(n.tempC) ||
+    (b != null && (has(b.percent) || has(b.acOnline)));
+}
+
 function batteryReadout(n) {
   const b = n.battery;
   if (!b || (!has(b.percent) && !has(b.acOnline))) {
@@ -514,6 +485,47 @@ function glyph(cls) {
   return svg;
 }
 
+function chevron() {
+  const svg = document.createElementNS(SVGNS, "svg");
+  svg.setAttribute("width", "10");
+  svg.setAttribute("height", "10");
+  svg.setAttribute("viewBox", "0 0 10 10");
+  svg.setAttribute("aria-hidden", "true");
+  svg.classList.add("chev");
+  const path = document.createElementNS(SVGNS, "path");
+  path.setAttribute("d", "M2 3.5l3 3 3-3");
+  path.setAttribute("fill", "none");
+  path.setAttribute("stroke", "currentColor");
+  path.setAttribute("stroke-width", "1.4");
+  path.setAttribute("stroke-linecap", "round");
+  path.setAttribute("stroke-linejoin", "round");
+  svg.appendChild(path);
+  return svg;
+}
+
+// One row shape for both lists in a device's drill-down: a primary label,
+// an optional muted meta line under it, and a status pill pinned right.
+function drillRow(primary, meta, pillClass, pillText) {
+  const li = el("li", "drill-row");
+  const main = el("div", "main");
+  main.appendChild(el("span", "name", primary));
+  if (meta) main.appendChild(el("span", "meta", meta));
+  li.appendChild(main);
+  li.appendChild(el("span", "pill " + pillClass, pillText));
+  return li;
+}
+
+function drillWorkloadRow(w) {
+  return drillRow(w.name, w.kind, w.healthy ? "good" : "critical", w.healthy ? "ok" : "degraded");
+}
+
+function drillPodRow(p) {
+  const bits = [p.namespace];
+  if (p.restarts) bits.push(p.restarts + (p.restarts === 1 ? " restart" : " restarts"));
+  bits.push(fmtAge(p.createdAt));
+  return drillRow(p.name, bits.join(" · "), p.healthy ? "good" : "critical", p.phase);
+}
+
 // The device line: what the machine is, in the words someone would use out
 // loud. Unknown parts are dropped rather than dashed — on an identity line
 // a row of em dashes tells you less than a shorter line does.
@@ -559,7 +571,14 @@ function specLines(n) {
   return [hardware, ops, platform].filter(parts => parts.length).map(parts => parts.join(" · "));
 }
 
-function nodeCard(n) {
+// expandedDevices tracks which cards are drilled open, keyed by node name.
+// It lives outside render() because render() rebuilds the whole node list
+// every poll — without state kept elsewhere, an expanded card would
+// collapse itself on the next 5s tick.
+const expandedDevices = new Set();
+let lastSnapshot = null;
+
+function nodeCard(n, s) {
   const card = el("div", "card" + (n.ready ? "" : " down"));
 
   const title = el("h2");
@@ -594,20 +613,65 @@ function nodeCard(n) {
     viz: meter(n.diskPercent, diskSev),
   }));
 
-  const tempSev = level(n.tempC, ...THRESHOLDS.temp);
-  stats.appendChild(tile("Temp", fmtTemp(n.tempC), {
-    severity: tempSev, word: tempSev === "critical" ? "overheating" : "hot",
-    viz: sparkline(n.series.tempC, "Temperature", "°C"),
-  }));
+  if (hasAgentData(n)) {
+    const tempSev = level(n.tempC, ...THRESHOLDS.temp);
+    stats.appendChild(tile("Temp", fmtTemp(n.tempC), {
+      severity: tempSev, word: tempSev === "critical" ? "overheating" : "hot",
+      viz: sparkline(n.series.tempC, "Temperature", "°C"),
+    }));
 
-  const bat = batteryReadout(n);
-  stats.appendChild(tile("Battery", bat.text, {
-    wide: true, severity: bat.sev, word: bat.word,
-    // A device with no battery has no battery history to draw either.
-    viz: bat.absent ? null : sparkline(n.series.batteryPercent, "Battery", "%", { min: 0, max: 100 }),
-  }));
+    const bat = batteryReadout(n);
+    stats.appendChild(tile("Battery", bat.text, {
+      wide: true, severity: bat.sev, word: bat.word,
+      // A device with no battery has no battery history to draw either.
+      viz: bat.absent ? null : sparkline(n.series.batteryPercent, "Battery", "%", { min: 0, max: 100 }),
+    }));
+  } else {
+    stats.appendChild(tile("Agent", "not reporting", {
+      wide: true,
+      note: "CPU, memory and disk still come from the API server.",
+    }));
+  }
 
   card.appendChild(stats);
+
+  if (n.podCount > 0) {
+    const devicePods = s.pods.filter(p => p.node === n.name);
+    const ownerKeys = new Set(
+      devicePods.filter(p => p.workload).map(p => p.namespace + "/" + p.workload)
+    );
+    const deviceWorkloads = s.workloads.filter(w => ownerKeys.has(w.namespace + "/" + w.name));
+    const expanded = expandedDevices.has(n.name);
+
+    const toggle = el("button", "drill-toggle");
+    toggle.type = "button";
+    toggle.setAttribute("aria-expanded", String(expanded));
+    toggle.appendChild(chevron());
+    toggle.appendChild(el("span", null, "Workloads & pods"));
+    toggle.appendChild(el("span", "count", String(n.podCount)));
+    toggle.addEventListener("click", () => {
+      if (expandedDevices.has(n.name)) expandedDevices.delete(n.name);
+      else expandedDevices.add(n.name);
+      if (lastSnapshot) render(lastSnapshot);
+    });
+    card.appendChild(toggle);
+
+    if (expanded) {
+      const drill = el("div", "drill");
+      if (deviceWorkloads.length) {
+        drill.appendChild(el("h4", null, "Workloads (" + deviceWorkloads.length + ")"));
+        const wl = el("ul", "drill-list");
+        wl.replaceChildren(...deviceWorkloads.map(drillWorkloadRow));
+        drill.appendChild(wl);
+      }
+      drill.appendChild(el("h4", null, "Pods (" + devicePods.length + ")"));
+      const pl = el("ul", "drill-list drill-scroll");
+      pl.replaceChildren(...devicePods.map(drillPodRow));
+      drill.appendChild(pl);
+      card.appendChild(drill);
+    }
+  }
+
   return card;
 }
 
@@ -692,75 +756,17 @@ function fleetPanel(fleet) {
   return [hero, tiles];
 }
 
-// "3 devices" swaps the word in for the label entirely; a plural count
-// beside a static noun ("Workloads (3)") reads like a badge bolted on
-// after the fact rather than something the page always meant to say.
-function countHeading(n, singular, plural) {
-  return n + " " + (n === 1 ? singular : plural);
-}
-
 function render(s) {
+  lastSnapshot = s;
   document.getElementById("fleet").replaceChildren(...fleetPanel(s.fleet));
 
   const nodes = sortedNodes(s.nodes);
-  document.getElementById("nodes").replaceChildren(...nodes.map(nodeCard));
+  document.getElementById("nodes").replaceChildren(...nodes.map(n => nodeCard(n, s)));
   document.getElementById("devices-heading").textContent =
     nodes.length === 1 ? "Device" : nodes.length + " devices";
 
-  document.getElementById("workloads-heading").textContent =
-    countHeading(s.workloads.length, "workload", "workloads");
-  document.getElementById("pods-heading").textContent =
-    countHeading(s.pods.length, "pod", "pods");
   document.getElementById("events-heading").textContent =
     "Warnings, last hour" + (s.events.length ? " (" + s.events.length + ")" : "");
-
-  const tbody = document.getElementById("workloads");
-  if (s.workloads.length) {
-    tbody.replaceChildren(...s.workloads.map(w => {
-      const tr = el("tr");
-      tr.appendChild(el("td", null, w.namespace));
-      tr.appendChild(el("td", null, w.name));
-      tr.appendChild(el("td", null, w.kind));
-      tr.appendChild(el("td", "num", w.ready + "/" + w.desired));
-      tr.appendChild(el("td", "num", String(w.restarts)));
-      const state = el("td", "state");
-      // The table is the WCAG-clean twin: state is a word first.
-      state.appendChild(el("span", "pill " + (w.healthy ? "good" : "critical"),
-        w.healthy ? "ok" : "degraded"));
-      tr.appendChild(state);
-      return tr;
-    }));
-  } else {
-    const tr = el("tr");
-    const td = el("td", "empty", "No workloads reported.");
-    td.colSpan = 6;
-    tr.appendChild(td);
-    tbody.replaceChildren(tr);
-  }
-
-  const pods = document.getElementById("pods");
-  if (s.pods.length) {
-    pods.replaceChildren(...s.pods.map(p => {
-      const tr = el("tr");
-      const nodeCell = el("td", null, p.node || "—");
-      if (!p.node) nodeCell.title = "not yet scheduled";
-      tr.appendChild(nodeCell);
-      tr.appendChild(el("td", null, p.namespace));
-      tr.appendChild(el("td", null, p.name));
-      tr.appendChild(el("td", "num", String(p.restarts)));
-      tr.appendChild(el("td", null, fmtAge(p.createdAt)));
-      const state = el("td", "state");
-      state.appendChild(el("span", "pill " + (p.healthy ? "good" : "critical"), p.phase));
-      tr.appendChild(state);
-      return tr;
-    }));
-  } else {
-    const tr = el("tr");
-    const td = el("td", "empty", "No pods reported.");
-    td.colSpan = 6;
-    tr.appendChild(td);
-    pods.replaceChildren(tr);
-  }
 
   const events = document.getElementById("events");
   if (s.events.length) {

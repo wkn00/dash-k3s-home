@@ -221,6 +221,24 @@ func TestAssembleCarriesPodPlacement(t *testing.T) {
 	}
 }
 
+// A device's drill-down needs each pod's owning workload to group by, found
+// the same way restart attribution finds it: by label selector, not by name
+// prefix. A pod with no matching workload (most kube-system pods) gets no
+// owner rather than a guess.
+func TestAssembleAttributesPodOwnerBySelector(t *testing.T) {
+	got := Assemble(baseRaw(), ring.NewSet(10), 15*time.Second)
+	byName := map[string]Pod{}
+	for _, p := range got.Pods {
+		byName[p.Name] = p
+	}
+	if got := byName["gsm-frontend-a"].Workload; got != "gsm-frontend" {
+		t.Errorf("gsm-frontend-a Workload = %q, want %q", got, "gsm-frontend")
+	}
+	if got := byName["other"].Workload; got != "" {
+		t.Errorf("other Workload = %q, want empty — its labels match no tracked workload", got)
+	}
+}
+
 // The spec a card prints comes from two sources, and the card has to
 // survive either one being absent: kernel and architecture come from the
 // API server, the CPU model comes from the node's own agent.
