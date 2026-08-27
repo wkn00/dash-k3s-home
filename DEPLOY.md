@@ -10,7 +10,7 @@ Checked against the live cluster, because it changes the manifests.
 | Fact | Consequence |
 |---|---|
 | **No ingress controller** | Never add an `Ingress` — it would silently do nothing. Exposure is a tunnel hostname pointed at the Service. |
-| **`wk` is tainted `node-role.kubernetes.io/control-plane:NoSchedule`** | The DaemonSet needs the toleration in `04-daemonset.yaml`, or it skips `wk` and the control-plane laptop reports no battery and no temperature — with no error anywhere to explain why. |
+| **`wk` is tainted `node-role.kubernetes.io/control-plane:NoSchedule` and `dedicated=control-plane-only:NoSchedule`** | The DaemonSet needs both tolerations in `04-daemonset.yaml`, or it skips `wk` and the control-plane laptop reports no battery and no temperature — with no error anywhere to explain why. |
 | ghcr.io/wkn00 packages are private | Copy `ghcr-creds` from ns `gsm` **before** applying the rest, or the pods sit in `ImagePullBackOff`. |
 | History is in memory | `replicas: 1`. A restart resets the sparklines; this is intended, not a bug to fix. |
 | No cert-manager | TLS terminates at Cloudflare; the pod serves plain HTTP. |

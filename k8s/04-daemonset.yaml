@@ -16,16 +16,24 @@ spec:
     spec:
       imagePullSecrets:
         - name: ghcr-creds
-      # wk carries node-role.kubernetes.io/control-plane:NoSchedule.
-      # Without this toleration the DaemonSet silently skips it and the
-      # control-plane laptop shows no battery and no temperature — with
-      # no error anywhere to explain why.
+      # wk carries node-role.kubernetes.io/control-plane:NoSchedule, plus
+      # dedicated=control-plane-only:NoSchedule since the wk0 migration
+      # walled it off from ordinary workloads. Without these tolerations
+      # the DaemonSet silently skips it and the control-plane laptop shows
+      # no battery and no temperature — with no error anywhere to explain
+      # why. The monitoring agent is exactly the kind of node-local,
+      # near-zero-footprint pod that dedication taint is not meant to keep
+      # out.
       tolerations:
         - key: node-role.kubernetes.io/control-plane
           operator: Exists
           effect: NoSchedule
         - key: node-role.kubernetes.io/master
           operator: Exists
+          effect: NoSchedule
+        - key: dedicated
+          operator: Equal
+          value: control-plane-only
           effect: NoSchedule
       containers:
         - name: agent
