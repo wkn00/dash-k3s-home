@@ -25,6 +25,7 @@
     --good:           #0ca30c;
     --warning:        #fab219;
     --critical:       #d03b3b;
+    --shadow:         0 1px 2px rgba(11, 11, 11, 0.04), 0 4px 14px rgba(11, 11, 11, 0.045);
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) {
@@ -40,6 +41,7 @@
       --accent:         #3987e5;
       --accent-soft:    #1c5cab;
       --track:          #0d366b;
+      --shadow:         0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 16px rgba(0, 0, 0, 0.28);
     }
   }
   :root[data-theme="dark"] {
@@ -55,6 +57,7 @@
     --accent:         #3987e5;
     --accent-soft:    #1c5cab;
     --track:          #0d366b;
+    --shadow:         0 1px 2px rgba(0, 0, 0, 0.25), 0 4px 16px rgba(0, 0, 0, 0.28);
   }
 
   * { box-sizing: border-box; }
@@ -102,8 +105,20 @@
 
   .card {
     background: var(--surface-1); border: 1px solid var(--border);
-    border-radius: 12px; padding: 14px 16px;
+    border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow);
   }
+
+  /* The lower half of the page used to be one narrow column stacked to the
+     floor — correct, but on a wide monitor it left most of the row empty
+     under three cards' worth of device grid. Panels put that width to
+     work; auto-fit collapses back to one column once there isn't room for
+     a second. */
+  .panels { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); align-items: start; }
+  .panel { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  /* A panel that grows to hundreds of pods must not stretch its row and
+     strand a three-line warnings panel in whitespace beside it — the cap
+     scrolls the panel instead of the page. */
+  .panel-scroll { max-height: 420px; overflow-y: auto; }
 
   /* The fleet strip. At ten devices the first question is "is anything
      wrong?", and scanning ten cards to answer it is the wrong way round. */
@@ -188,10 +203,34 @@
   .detailed .stats .note    { order: 4; grid-column: 2 / -1; }
   .detailed .cards { grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
 
-  .wrap { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
+  .wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+  /* Fixed layout plus a colgroup on each table is what actually makes a
+     long identifier wrap instead of scroll: auto layout sizes columns to
+     their unwrapped content first and only wraps once nothing else can
+     shrink, which in a narrow panel means never. */
+  table { width: 100%; border-collapse: collapse; background: var(--surface-1); table-layout: fixed; }
   th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid var(--grid); font-size: 13px; }
+  /* A pod or namespace name is an identifier, not prose — it wraps instead
+     of forcing the row past the panel width and pushing the status column
+     out of view, the same trade the device model line already makes.
+     Headers are our own short vocabulary, sized by the colgroups below to
+     fit unwrapped at panel widths — the mobile breakpoint further down
+     covers the width they don't fit. */
+  td { overflow-wrap: anywhere; }
+  /* A fixed 6-column layout has nowhere left to give on a phone-width
+     single column — every header would wrap onto three lines to stay
+     inside it. Letting the table size to its natural, unwrapped content
+     and scroll sideways in .wrap reads better there than that. */
+  @media (max-width: 640px) {
+    .panel-scroll table { table-layout: auto; width: auto; min-width: 100%; }
+    .panel-scroll col { width: auto !important; }
+    .panel-scroll th, .panel-scroll td { white-space: nowrap; }
+  }
   th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 600; }
+  /* Sticky only matters once .panel-scroll caps the height and the table
+     grows past it — a header worth scrolling to find defeats the point of
+     a table. */
+  .panel-scroll th { position: sticky; top: 0; background: var(--surface-1); }
   tr:last-child td { border-bottom: none; }
   /* Columns of numbers align vertically, so these do get tabular figures. */
   td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -220,20 +259,40 @@
     <h3 id="devices-heading">Devices</h3>
     <div class="cards" id="nodes"></div>
   </section>
-  <section>
-    <h3>Workloads</h3>
-    <div class="wrap"><table>
-      <thead><tr>
-        <th>Namespace</th><th>Name</th><th>Kind</th>
-        <th class="num">Ready</th><th class="num">Restarts</th><th>State</th>
-      </tr></thead>
-      <tbody id="workloads"></tbody>
-    </table></div>
-  </section>
-  <section>
-    <h3>Warnings, last hour</h3>
-    <ul class="events" id="events"></ul>
-  </section>
+  <div class="panels">
+    <section class="panel">
+      <h3 id="workloads-heading">Workloads</h3>
+      <div class="wrap panel-scroll"><table>
+        <colgroup>
+          <col style="width:18%"><col style="width:22%"><col style="width:14%">
+          <col style="width:10%"><col style="width:18%"><col style="width:18%">
+        </colgroup>
+        <thead><tr>
+          <th>Namespace</th><th>Name</th><th>Kind</th>
+          <th class="num">Ready</th><th class="num">Restarts</th><th>State</th>
+        </tr></thead>
+        <tbody id="workloads"></tbody>
+      </table></div>
+    </section>
+    <section class="panel">
+      <h3 id="pods-heading">Pods</h3>
+      <div class="wrap panel-scroll"><table>
+        <colgroup>
+          <col style="width:12%"><col style="width:18%"><col style="width:22%">
+          <col style="width:16%"><col style="width:10%"><col style="width:22%">
+        </colgroup>
+        <thead><tr>
+          <th>Node</th><th>Namespace</th><th>Pod</th>
+          <th class="num">Restarts</th><th>Age</th><th>Status</th>
+        </tr></thead>
+        <tbody id="pods"></tbody>
+      </table></div>
+    </section>
+    <section class="panel">
+      <h3 id="events-heading">Warnings, last hour</h3>
+      <div class="panel-scroll"><ul class="events" id="events"></ul></div>
+    </section>
+  </div>
 </main>
 <script>
 const SVGNS = "http://www.w3.org/2000/svg";
@@ -262,6 +321,15 @@ function fmtUptime(s) {
   if (!has(s)) return "—";
   const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600);
   return d > 0 ? d + "d " + h + "h" : h + "h " + Math.floor((s % 3600) / 60) + "m";
+}
+
+// A pod's age, in the same "d h" / "h m" shape as a node's uptime — reused
+// rather than reinvented, since both answer "how long has this been
+// running" from a duration in seconds.
+function fmtAge(iso) {
+  if (!iso || String(iso).startsWith("0001")) return "—";
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  return isNaN(s) || s < 0 ? "—" : fmtUptime(s);
 }
 
 // How long the node has been *in the cluster*, which is not the uptime
@@ -624,6 +692,13 @@ function fleetPanel(fleet) {
   return [hero, tiles];
 }
 
+// "3 devices" swaps the word in for the label entirely; a plural count
+// beside a static noun ("Workloads (3)") reads like a badge bolted on
+// after the fact rather than something the page always meant to say.
+function countHeading(n, singular, plural) {
+  return n + " " + (n === 1 ? singular : plural);
+}
+
 function render(s) {
   document.getElementById("fleet").replaceChildren(...fleetPanel(s.fleet));
 
@@ -631,6 +706,13 @@ function render(s) {
   document.getElementById("nodes").replaceChildren(...nodes.map(nodeCard));
   document.getElementById("devices-heading").textContent =
     nodes.length === 1 ? "Device" : nodes.length + " devices";
+
+  document.getElementById("workloads-heading").textContent =
+    countHeading(s.workloads.length, "workload", "workloads");
+  document.getElementById("pods-heading").textContent =
+    countHeading(s.pods.length, "pod", "pods");
+  document.getElementById("events-heading").textContent =
+    "Warnings, last hour" + (s.events.length ? " (" + s.events.length + ")" : "");
 
   const tbody = document.getElementById("workloads");
   if (s.workloads.length) {
@@ -654,6 +736,30 @@ function render(s) {
     td.colSpan = 6;
     tr.appendChild(td);
     tbody.replaceChildren(tr);
+  }
+
+  const pods = document.getElementById("pods");
+  if (s.pods.length) {
+    pods.replaceChildren(...s.pods.map(p => {
+      const tr = el("tr");
+      const nodeCell = el("td", null, p.node || "—");
+      if (!p.node) nodeCell.title = "not yet scheduled";
+      tr.appendChild(nodeCell);
+      tr.appendChild(el("td", null, p.namespace));
+      tr.appendChild(el("td", null, p.name));
+      tr.appendChild(el("td", "num", String(p.restarts)));
+      tr.appendChild(el("td", null, fmtAge(p.createdAt)));
+      const state = el("td", "state");
+      state.appendChild(el("span", "pill " + (p.healthy ? "good" : "critical"), p.phase));
+      tr.appendChild(state);
+      return tr;
+    }));
+  } else {
+    const tr = el("tr");
+    const td = el("td", "empty", "No pods reported.");
+    td.colSpan = 6;
+    tr.appendChild(td);
+    pods.replaceChildren(tr);
   }
 
   const events = document.getElementById("events");

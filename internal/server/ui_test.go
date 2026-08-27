@@ -184,6 +184,27 @@ func TestPageOffersADensityToggle(t *testing.T) {
 	}
 }
 
+// The pods table is the placement answer — which device a pod is actually
+// on — so it has to read every field state.Pod marshals, the same way the
+// node card is checked against state.Node.
+func TestPageRendersPodPlacement(t *testing.T) {
+	keys := marshalledKeys(t, state.Pod{})
+	page := string(uiHTML)
+
+	if !strings.Contains(page, `id="pods"`) {
+		t.Error("page is missing the pods table body")
+	}
+	for _, field := range []string{"namespace", "name", "node", "phase", "healthy", "restarts", "createdAt"} {
+		if _, ok := keys[field]; !ok {
+			t.Errorf("state.Pod no longer marshals %q — the page cannot render it", field)
+			continue
+		}
+		if !strings.Contains(page, "."+field) {
+			t.Errorf("page never reads p.%s, so the pods table is missing it", field)
+		}
+	}
+}
+
 // marshalledKeys is the JSON object a value produces, so tests can assert
 // against the tags Go actually emits rather than against string literals
 // that drift.

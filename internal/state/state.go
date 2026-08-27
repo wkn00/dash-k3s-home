@@ -68,6 +68,20 @@ type Workload struct {
 	Healthy   bool   `json:"healthy"`
 }
 
+// Pod is the placement answer: which device is this actually running on
+// right now. Phase is the word the API server itself uses (Running,
+// Pending, Succeeded, Failed, Unknown), so the status pill never invents
+// wording the cluster didn't say.
+type Pod struct {
+	Namespace string    `json:"namespace"`
+	Name      string    `json:"name"`
+	Node      string    `json:"node"`
+	Phase     string    `json:"phase"`
+	Healthy   bool      `json:"healthy"`
+	Restarts  int       `json:"restarts"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 type Event struct {
 	At        time.Time `json:"at"`
 	Namespace string    `json:"namespace"`
@@ -87,6 +101,7 @@ type Snapshot struct {
 	Nodes     []Node     `json:"nodes"`
 	Fleet     Fleet      `json:"fleet"`
 	Workloads []Workload `json:"workloads"`
+	Pods      []Pod      `json:"pods"`
 	Events    []Event    `json:"events"`
 	Meta      Meta       `json:"meta"`
 }
@@ -105,6 +120,7 @@ func Assemble(raw collect.Raw, buffers *ring.Set, interval time.Duration) Snapsh
 	snap := Snapshot{
 		Nodes:     make([]Node, 0, len(raw.Nodes)),
 		Workloads: make([]Workload, 0, len(raw.Workloads)),
+		Pods:      make([]Pod, 0, len(raw.Pods)),
 		Events:    []Event{},
 		Meta: Meta{
 			SampledAt:             raw.At,
@@ -199,6 +215,34 @@ func Assemble(raw collect.Raw, buffers *ring.Set, interval time.Duration) Snapsh
 		a, b := snap.Workloads[i], snap.Workloads[j]
 		if a.Healthy != b.Healthy {
 			return !a.Healthy // trouble first: this is what the page is for
+		}
+		if a.Namespace != b.Namespace {
+			return a.Namespace < b.Namespace
+		}
+		return a.Name < b.Name
+	})
+
+	// One row per pod is the placement answer the workload table can't
+	// give: a Deployment's ready count says nothing about which of ten
+	// devices its replicas actually landed on.
+	for _, pod := range raw.Pods {
+		snap.Pods = append(snap.Pods, Pod{
+			Namespace: pod.Namespace,
+			Name:      pod.Name,
+			Node:      pod.NodeName,
+			Phase:     pod.Phase,
+			Healthy:   pod.Phase == "Running" || pod.Phase == "Succeeded",
+			Restarts:  pod.Restarts,
+			CreatedAt: pod.CreatedAt,
+		})
+	}
+	sort.Slice(snap.Pods, func(i, j int) bool {
+		a, b := snap.Pods[i], snap.Pods[j]
+		if a.Healthy != b.Healthy {
+			return !a.Healthy // trouble first, same as the workload table
+		}
+		if a.Restarts != b.Restarts {
+			return a.Restarts > b.Restarts
 		}
 		if a.Namespace != b.Namespace {
 			return a.Namespace < b.Namespace

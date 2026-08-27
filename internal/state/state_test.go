@@ -183,6 +183,44 @@ func TestSnapshotMarshalsWithStableKeys(t *testing.T) {
 	}
 }
 
+// The pods table is the placement answer: which device is this pod
+// actually on. Sort order puts unhealthy pods first, then higher restart
+// counts, mirroring the workload table's trouble-first convention.
+func TestAssembleSortsPodsTroubleFirst(t *testing.T) {
+	raw := baseRaw()
+	raw.Pods = append(raw.Pods, kube.Pod{
+		Name: "stuck", Namespace: "gsm", NodeName: "", Phase: "Pending", Restarts: 0,
+	})
+	got := Assemble(raw, ring.NewSet(10), 15*time.Second)
+
+	if len(got.Pods) != 4 {
+		t.Fatalf("len(Pods) = %d, want 4", len(got.Pods))
+	}
+	if got.Pods[0].Name != "stuck" || got.Pods[0].Healthy {
+		t.Errorf("first pod = %+v, want the unhealthy pending pod first", got.Pods[0])
+	}
+	if got.Pods[0].Node != "" {
+		t.Errorf("stuck pod Node = %q, want empty (unscheduled)", got.Pods[0].Node)
+	}
+
+	// Among healthy pods, the one with more restarts sorts first.
+	if got.Pods[1].Name != "other" || got.Pods[1].Restarts != 99 {
+		t.Errorf("second pod = %+v, want the 99-restart pod next", got.Pods[1])
+	}
+}
+
+func TestAssembleCarriesPodPlacement(t *testing.T) {
+	got := Assemble(baseRaw(), ring.NewSet(10), 15*time.Second)
+	byName := map[string]Pod{}
+	for _, p := range got.Pods {
+		byName[p.Name] = p
+	}
+	a := byName["gsm-frontend-a"]
+	if a.Node != "wk1" || a.Namespace != "gsm" || a.Phase != "Running" || !a.Healthy || a.Restarts != 2 {
+		t.Errorf("gsm-frontend-a = %+v, want node wk1, namespace gsm, Running, healthy, 2 restarts", a)
+	}
+}
+
 // The spec a card prints comes from two sources, and the card has to
 // survive either one being absent: kernel and architecture come from the
 // API server, the CPU model comes from the node's own agent.
