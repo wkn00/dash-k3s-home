@@ -92,7 +92,14 @@
     background: var(--plane); border-bottom: 1px solid var(--border);
   }
   .brand { display: flex; align-items: center; gap: 10px; }
-  .brand .logo { color: var(--accent); flex: none; }
+  /* A solid monogram, not a tinted badge like the KPI icons — a logo reads
+     as an identity mark, not one more category chip. */
+  .logo-mark {
+    flex: none; width: 32px; height: 32px; border-radius: 9px;
+    background: var(--accent); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12.5px; font-weight: 800; letter-spacing: -0.02em;
+  }
   .brand h1 { font-size: 16px; margin: 0; letter-spacing: -0.01em; font-weight: 700; line-height: 1.2; }
   .brand .tagline { font-size: 11.5px; color: var(--text-muted); }
   h3 {
@@ -312,12 +319,18 @@
   .alert-head { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: baseline; }
   .alert .msg { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
   .empty { color: var(--text-muted); font-size: 13px; padding: 10px 2px; }
+
+  .site-footer {
+    max-width: 1600px; margin: 6px auto 0; padding: 18px 24px 26px;
+    border-top: 1px solid var(--border); text-align: center;
+    font-size: 12px; color: var(--text-muted);
+  }
 </style>
 </head>
 <body>
 <header>
   <div class="brand">
-    <span class="logo" id="logo"></span>
+    <span class="logo-mark" aria-hidden="true">WK</span>
     <div>
       <h1>k3s cluster</h1>
       <div class="tagline">Homelab fleet monitor</div>
@@ -354,6 +367,7 @@
     <ul class="events" id="events"></ul>
   </section>
 </main>
+<footer class="site-footer">Built by Wael</footer>
 <dialog class="device-modal" id="device-modal">
   <div class="modal-head">
     <h3 id="modal-title"></h3>
@@ -570,32 +584,6 @@ function icon(name, opts) {
     c.setAttribute("fill", "none");
     c.setAttribute("stroke", "currentColor");
     c.setAttribute("stroke-width", "1.3");
-    svg.appendChild(c);
-  }
-  return svg;
-}
-
-// The 3-node mark in the header — an abstract cluster, not a chassis, so it
-// reads as the product rather than as one more device glyph.
-function logoMark() {
-  const svg = document.createElementNS(SVGNS, "svg");
-  svg.setAttribute("width", "22");
-  svg.setAttribute("height", "22");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("aria-hidden", "true");
-  const path = document.createElementNS(SVGNS, "path");
-  path.setAttribute("d", "M6 18L12 7L18 18Z");
-  path.setAttribute("fill", "none");
-  path.setAttribute("stroke", "currentColor");
-  path.setAttribute("stroke-width", "1.6");
-  path.setAttribute("stroke-linejoin", "round");
-  svg.appendChild(path);
-  for (const [cx, cy] of [[6, 18], [18, 18], [12, 7]]) {
-    const c = document.createElementNS(SVGNS, "circle");
-    c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", "2.4");
-    c.setAttribute("fill", "var(--plane)");
-    c.setAttribute("stroke", "currentColor");
-    c.setAttribute("stroke-width", "1.6");
     svg.appendChild(c);
   }
   return svg;
@@ -1124,7 +1112,6 @@ async function tick() {
   }
 }
 
-document.getElementById("logo").appendChild(logoMark());
 initDensity();
 initTheme();
 initDeviceModal();
