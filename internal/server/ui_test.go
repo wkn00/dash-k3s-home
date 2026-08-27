@@ -204,6 +204,28 @@ func TestPageOffersAThemeToggle(t *testing.T) {
 	}
 }
 
+// The fleet-wide Workloads section is the one place every workload is
+// listed regardless of which device it landed on — the per-device pop-out
+// only ever shows a slice of it — so it has to read every field
+// state.Workload marshals.
+func TestPageRendersAWorkloadsSection(t *testing.T) {
+	keys := marshalledKeys(t, state.Workload{})
+	page := string(uiHTML)
+
+	if !strings.Contains(page, `id="workloads"`) {
+		t.Error("page is missing the workloads section")
+	}
+	for _, field := range []string{"namespace", "name", "kind", "ready", "desired", "restarts", "healthy"} {
+		if _, ok := keys[field]; !ok {
+			t.Errorf("state.Workload no longer marshals %q — the page cannot render it", field)
+			continue
+		}
+		if !strings.Contains(page, "."+field) {
+			t.Errorf("page never reads w.%s, so the workloads section is missing it", field)
+		}
+	}
+}
+
 // The placement answer — which device a pod is actually on — lives in the
 // device's pop-out modal rather than a standalone table, so it has to read
 // every field state.Pod marshals, the same way the node card is checked

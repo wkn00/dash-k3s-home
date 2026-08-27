@@ -99,9 +99,6 @@
     font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
     color: var(--text-muted); margin: 0 0 10px; font-weight: 600;
   }
-  /* Sits between the Devices and Warnings sections as its own line — the
-     fleet-wide total, distinct from either section's own heading. */
-  .fleet-note { margin: -12px 0 0; text-align: center; font-size: 12.5px; color: var(--text-muted); }
   .grow { flex: 1 1 auto; }
   .muted { color: var(--text-secondary); font-size: 12px; }
   /* The spec is context rather than status, so it sits a step further
@@ -348,7 +345,10 @@
     <h3 id="devices-heading">Devices</h3>
     <div class="cards" id="nodes"></div>
   </section>
-  <p class="fleet-note" id="devices-meta"></p>
+  <section>
+    <h3 id="workloads-heading">Workloads</h3>
+    <div class="card"><ul class="drill-list" id="workloads"></ul></div>
+  </section>
   <section>
     <h3 id="events-heading">Warnings, last hour</h3>
     <ul class="events" id="events"></ul>
@@ -673,7 +673,9 @@ function drillRow(primary, meta, pillClass, pillText) {
 }
 
 function drillWorkloadRow(w) {
-  return drillRow(w.name, w.kind, w.healthy ? "good" : "critical", w.healthy ? "ok" : "degraded");
+  const bits = [w.namespace, w.kind, w.ready + "/" + w.desired];
+  if (w.restarts) bits.push(w.restarts + (w.restarts === 1 ? " restart" : " restarts"));
+  return drillRow(w.name, bits.join(" · "), w.healthy ? "good" : "critical", w.healthy ? "ok" : "degraded");
 }
 
 function drillPodRow(p) {
@@ -1006,9 +1008,15 @@ function render(s) {
   document.getElementById("nodes").replaceChildren(...nodes.map(n => nodeCard(n, s)));
   document.getElementById("devices-heading").textContent =
     nodes.length === 1 ? "Device" : nodes.length + " devices";
-  document.getElementById("devices-meta").textContent =
-    s.fleet.pods + (s.fleet.pods === 1 ? " pod" : " pods") + " across " +
-    s.fleet.workloadsTotal + (s.fleet.workloadsTotal === 1 ? " workload" : " workloads");
+
+  document.getElementById("workloads-heading").textContent =
+    s.workloads.length === 1 ? "1 workload" : s.workloads.length + " workloads";
+  const workloadsList = document.getElementById("workloads");
+  if (s.workloads.length) {
+    workloadsList.replaceChildren(...s.workloads.map(drillWorkloadRow));
+  } else {
+    workloadsList.replaceChildren(el("li", "empty", "No workloads reported."));
+  }
 
   document.getElementById("events-heading").textContent =
     "Warnings, last hour" + (s.events.length ? " (" + s.events.length + ")" : "");
