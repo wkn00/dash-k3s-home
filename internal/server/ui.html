@@ -908,27 +908,13 @@ function initDeviceModal() {
   document.getElementById("modal-close").addEventListener("click", () => modal.close());
 }
 
-// Trouble first. The sort lives here rather than in the server because it
-// needs the thresholds above, and a second copy of 75/90 and 80/92 in Go is
-// how the two drift apart. Name order breaks ties, so a healthy fleet keeps
-// the stable ordering the cards had before.
-function troubleScore(n) {
-  if (!n.ready) return 1000;
-  let score = 0;
-  for (const [v, t] of [[n.cpuPercent, THRESHOLDS.cpu], [n.memPercent, THRESHOLDS.mem],
-                        [n.diskPercent, THRESHOLDS.disk], [n.tempC, THRESHOLDS.temp]]) {
-    const sev = level(v, ...t);
-    if (sev === "critical") score += 100;
-    else if (sev === "warning") score += 10;
-  }
-  if (n.battery && n.battery.status === "Discharging") {
-    score += has(n.battery.percent) && n.battery.percent < 25 ? 100 : 10;
-  }
-  return score;
-}
-
 function sortedNodes(nodes) {
-  return nodes.slice().sort((a, b) => troubleScore(b) - troubleScore(a) || a.name.localeCompare(b.name));
+  return nodes.slice().sort((a, b) => {
+    const na = a.name.match(/\d+$/), nb = b.name.match(/\d+$/);
+    if (na && nb) return Number(na[0]) - Number(nb[0]) || a.name.localeCompare(b.name);
+    if (na || nb) return na ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
 }
 
 function fleetKPIs(fleet) {
