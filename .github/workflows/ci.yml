@@ -1,0 +1,48 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master, wip/pre-migration]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+
+  image:
+    if: github.event_name != 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: tag
+        run: echo "version=$(grep -oP 'k3s-dash:\K[0-9.]+' k8s/02-deployment.yaml)" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/wkn00/k3s-dash:${{ steps.tag.outputs.version }}
+            ghcr.io/wkn00/k3s-dash:latest
+            ghcr.io/wkn00/k3s-dash:${{ github.sha }}
