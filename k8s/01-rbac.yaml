@@ -13,7 +13,7 @@ metadata:
   name: k3s-dash-reader
 rules:
   - apiGroups: [""]
-    resources: ["nodes", "pods", "namespaces", "events"]
+    resources: ["nodes", "pods", "namespaces", "events", "resourcequotas", "limitranges", "persistentvolumeclaims", "services"]
     verbs: ["get", "list", "watch"]
   # Disk usage comes from each kubelet's stats endpoint through the API
   # server's node proxy; metrics-server does not expose filesystem stats.

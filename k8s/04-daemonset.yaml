@@ -37,7 +37,7 @@ spec:
           effect: NoSchedule
       containers:
         - name: agent
-          image: ghcr.io/wkn00/k3s-dash:0.8.5
+          image: ghcr.io/wkn00/k3s-dash:0.9.0
           args: ["agent", "--addr=:9100", "--root=/host"]
           env:
             - name: NODE_NAME

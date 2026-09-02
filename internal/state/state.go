@@ -86,6 +86,64 @@ type Pod struct {
 	Workload string `json:"workload"`
 }
 
+// QuotaItem is one resource line out of a namespace's ResourceQuota, hard
+// and used already parsed into the resource's base unit. Percent is nil
+// when Hard is zero or absent, the same "don't show a fake number" rule
+// every other ratio on this page follows.
+type QuotaItem struct {
+	Resource string   `json:"resource"`
+	Hard     float64  `json:"hard"`
+	Used     float64  `json:"used"`
+	Percent  *float64 `json:"percent"`
+}
+
+type LimitRangeItem struct {
+	Type           string            `json:"type"`
+	Default        map[string]string `json:"default"`
+	DefaultRequest map[string]string `json:"defaultRequest"`
+	Min            map[string]string `json:"min"`
+	Max            map[string]string `json:"max"`
+}
+
+type PVC struct {
+	Name          string   `json:"name"`
+	Phase         string   `json:"phase"`
+	Bound         bool     `json:"bound"`
+	StorageClass  string   `json:"storageClass"`
+	AccessModes   []string `json:"accessModes"`
+	CapacityBytes float64  `json:"capacityBytes"`
+}
+
+type ServicePort struct {
+	Port     int    `json:"port"`
+	Protocol string `json:"protocol"`
+}
+
+type Service struct {
+	Name      string        `json:"name"`
+	Type      string        `json:"type"`
+	ClusterIP string        `json:"clusterIP"`
+	Ports     []ServicePort `json:"ports"`
+}
+
+// Namespace rolls up everything the page shows about one namespace: pod
+// and workload counts (matched by the same .Namespace field Workloads and
+// Pods already carry), plus its own quota, limit ranges, PVCs and
+// services. A namespace with none of those has empty slices, never nil —
+// the page ranges over them without a null check.
+type Namespace struct {
+	Name               string           `json:"name"`
+	Phase              string           `json:"phase"`
+	CreatedAt          time.Time        `json:"createdAt"`
+	PodCount           int              `json:"podCount"`
+	WorkloadCount      int              `json:"workloadCount"`
+	UnhealthyWorkloads int              `json:"unhealthyWorkloads"`
+	Quota              []QuotaItem      `json:"quota"`
+	LimitRanges        []LimitRangeItem `json:"limitRanges"`
+	PVCs               []PVC            `json:"pvcs"`
+	Services           []Service        `json:"services"`
+}
+
 type Event struct {
 	At        time.Time `json:"at"`
 	Namespace string    `json:"namespace"`
@@ -102,12 +160,13 @@ type Meta struct {
 }
 
 type Snapshot struct {
-	Nodes     []Node     `json:"nodes"`
-	Fleet     Fleet      `json:"fleet"`
-	Workloads []Workload `json:"workloads"`
-	Pods      []Pod      `json:"pods"`
-	Events    []Event    `json:"events"`
-	Meta      Meta       `json:"meta"`
+	Nodes      []Node      `json:"nodes"`
+	Fleet      Fleet       `json:"fleet"`
+	Workloads  []Workload  `json:"workloads"`
+	Pods       []Pod       `json:"pods"`
+	Namespaces []Namespace `json:"namespaces"`
+	Events     []Event     `json:"events"`
+	Meta       Meta        `json:"meta"`
 }
 
 // ratio guards every percentage in the program. Capacity is zero whenever
@@ -122,10 +181,11 @@ func ratio(used, capacity float64) *float64 {
 
 func Assemble(raw collect.Raw, buffers *ring.Set, interval time.Duration) Snapshot {
 	snap := Snapshot{
-		Nodes:     make([]Node, 0, len(raw.Nodes)),
-		Workloads: make([]Workload, 0, len(raw.Workloads)),
-		Pods:      make([]Pod, 0, len(raw.Pods)),
-		Events:    []Event{},
+		Nodes:      make([]Node, 0, len(raw.Nodes)),
+		Workloads:  make([]Workload, 0, len(raw.Workloads)),
+		Pods:       make([]Pod, 0, len(raw.Pods)),
+		Namespaces: make([]Namespace, 0, len(raw.Namespaces)),
+		Events:     []Event{},
 		Meta: Meta{
 			SampledAt:             raw.At,
 			SampleIntervalSeconds: int(interval.Seconds()),
@@ -258,6 +318,91 @@ func Assemble(raw collect.Raw, buffers *ring.Set, interval time.Duration) Snapsh
 		}
 		if a.Namespace != b.Namespace {
 			return a.Namespace < b.Namespace
+		}
+		return a.Name < b.Name
+	})
+
+	podsPerNamespace := map[string]int{}
+	for _, pod := range raw.Pods {
+		podsPerNamespace[pod.Namespace]++
+	}
+	workloadsPerNamespace := map[string]int{}
+	unhealthyPerNamespace := map[string]int{}
+	for _, w := range snap.Workloads {
+		workloadsPerNamespace[w.Namespace]++
+		if !w.Healthy {
+			unhealthyPerNamespace[w.Namespace]++
+		}
+	}
+
+	for _, kn := range raw.Namespaces {
+		ns := Namespace{
+			Name:               kn.Name,
+			Phase:              kn.Phase,
+			CreatedAt:          kn.CreatedAt,
+			PodCount:           podsPerNamespace[kn.Name],
+			WorkloadCount:      workloadsPerNamespace[kn.Name],
+			UnhealthyWorkloads: unhealthyPerNamespace[kn.Name],
+			Quota:              []QuotaItem{},
+			LimitRanges:        []LimitRangeItem{},
+			PVCs:               []PVC{},
+			Services:           []Service{},
+		}
+		for _, q := range raw.Quotas {
+			if q.Namespace != kn.Name {
+				continue
+			}
+			for resource, hardStr := range q.Hard {
+				hard, err := kube.ParseQuantity(hardStr)
+				if err != nil {
+					continue
+				}
+				var used float64
+				if usedStr, ok := q.Used[resource]; ok {
+					used, _ = kube.ParseQuantity(usedStr)
+				}
+				ns.Quota = append(ns.Quota, QuotaItem{Resource: resource, Hard: hard, Used: used, Percent: ratio(used, hard)})
+			}
+		}
+		sort.Slice(ns.Quota, func(i, j int) bool { return ns.Quota[i].Resource < ns.Quota[j].Resource })
+
+		for _, lr := range raw.LimitRanges {
+			if lr.Namespace != kn.Name {
+				continue
+			}
+			for _, item := range lr.Limits {
+				ns.LimitRanges = append(ns.LimitRanges, LimitRangeItem(item))
+			}
+		}
+
+		for _, p := range raw.PVCs {
+			if p.Namespace != kn.Name {
+				continue
+			}
+			ns.PVCs = append(ns.PVCs, PVC{
+				Name: p.Name, Phase: p.Phase, Bound: p.Phase == "Bound",
+				StorageClass: p.StorageClass, AccessModes: p.AccessModes, CapacityBytes: p.CapacityBytes,
+			})
+		}
+
+		for _, s := range raw.Services {
+			if s.Namespace != kn.Name {
+				continue
+			}
+			svc := Service{Name: s.Name, Type: s.Type, ClusterIP: s.ClusterIP}
+			for _, p := range s.Ports {
+				svc.Ports = append(svc.Ports, ServicePort(p))
+			}
+			ns.Services = append(ns.Services, svc)
+		}
+
+		snap.Namespaces = append(snap.Namespaces, ns)
+	}
+	// Trouble first, same convention as Workloads and Pods.
+	sort.Slice(snap.Namespaces, func(i, j int) bool {
+		a, b := snap.Namespaces[i], snap.Namespaces[j]
+		if (a.UnhealthyWorkloads > 0) != (b.UnhealthyWorkloads > 0) {
+			return a.UnhealthyWorkloads > 0
 		}
 		return a.Name < b.Name
 	})

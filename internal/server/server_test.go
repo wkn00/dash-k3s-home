@@ -27,6 +27,11 @@ func fakeCluster(t *testing.T) *kube.Client {
 		"/apis/metrics.k8s.io/v1beta1/nodes":   `{"items":[{"metadata":{"name":"wk"},"usage":{"cpu":"2","memory":"8Gi"}}]}`,
 		"/api/v1/nodes/wk/proxy/stats/summary": `{"node":{"fs":{"usedBytes":250,"capacityBytes":1000}}}`,
 		"/api/v1/namespaces/k3s-dash/pods":     `{"items":[]}`,
+		"/api/v1/namespaces":                   `{"items":[]}`,
+		"/api/v1/resourcequotas":               `{"items":[]}`,
+		"/api/v1/limitranges":                  `{"items":[]}`,
+		"/api/v1/persistentvolumeclaims":       `{"items":[]}`,
+		"/api/v1/services":                     `{"items":[]}`,
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, ok := bodies[r.URL.Path]

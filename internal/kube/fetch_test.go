@@ -204,6 +204,115 @@ func TestWarningsPrefersLastTimestampThenEventTime(t *testing.T) {
 	}
 }
 
+func TestNamespaces(t *testing.T) {
+	c := routes(t, map[string]string{"/api/v1/namespaces": `{"items":[
+	 {"metadata":{"name":"gsm","creationTimestamp":"2026-06-22T16:20:00Z"},"status":{"phase":"Active"}},
+	 {"metadata":{"name":"dying","creationTimestamp":"2026-08-01T00:00:00Z"},"status":{"phase":"Terminating"}}
+	]}`})
+	got, err := c.Namespaces(context.Background())
+	if err != nil {
+		t.Fatalf("Namespaces: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len(Namespaces) = %d, want 2", len(got))
+	}
+	if got[0].Name != "gsm" || got[0].Phase != "Active" {
+		t.Errorf("gsm = %+v, want Name gsm, Phase Active", got[0])
+	}
+	if got[1].Phase != "Terminating" {
+		t.Errorf("dying Phase = %q, want Terminating", got[1].Phase)
+	}
+}
+
+func TestResourceQuotas(t *testing.T) {
+	c := routes(t, map[string]string{"/api/v1/resourcequotas": `{"items":[
+	 {"metadata":{"name":"compute","namespace":"gsm"},
+	  "status":{"hard":{"limits.cpu":"4","pods":"20"},"used":{"limits.cpu":"1500m","pods":"6"}}}
+	]}`})
+	got, err := c.ResourceQuotas(context.Background())
+	if err != nil {
+		t.Fatalf("ResourceQuotas: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(ResourceQuotas) = %d, want 1", len(got))
+	}
+	q := got[0]
+	if q.Namespace != "gsm" || q.Name != "compute" {
+		t.Errorf("q = %+v, want namespace gsm, name compute", q)
+	}
+	if q.Hard["limits.cpu"] != "4" || q.Used["limits.cpu"] != "1500m" {
+		t.Errorf("q.Hard/Used = %v/%v, want raw quantity strings passed through", q.Hard, q.Used)
+	}
+}
+
+func TestLimitRanges(t *testing.T) {
+	c := routes(t, map[string]string{"/api/v1/limitranges": `{"items":[
+	 {"metadata":{"name":"defaults","namespace":"gsm"},
+	  "spec":{"limits":[{"type":"Container","default":{"cpu":"500m"},"defaultRequest":{"cpu":"100m"},"min":{"cpu":"50m"},"max":{"cpu":"2"}}]}}
+	]}`})
+	got, err := c.LimitRanges(context.Background())
+	if err != nil {
+		t.Fatalf("LimitRanges: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(LimitRanges) = %d, want 1", len(got))
+	}
+	lr := got[0]
+	if lr.Namespace != "gsm" || len(lr.Limits) != 1 {
+		t.Fatalf("lr = %+v, want namespace gsm with 1 limit item", lr)
+	}
+	item := lr.Limits[0]
+	if item.Type != "Container" || item.Default["cpu"] != "500m" || item.Min["cpu"] != "50m" || item.Max["cpu"] != "2" {
+		t.Errorf("item = %+v, want Container with default/min/max cpu populated", item)
+	}
+}
+
+func TestPersistentVolumeClaims(t *testing.T) {
+	c := routes(t, map[string]string{"/api/v1/persistentvolumeclaims": `{"items":[
+	 {"metadata":{"name":"priset-data","namespace":"priset"},
+	  "spec":{"storageClassName":"longhorn","accessModes":["ReadWriteOnce"]},
+	  "status":{"phase":"Bound","capacity":{"storage":"5Gi"}}}
+	]}`})
+	got, err := c.PersistentVolumeClaims(context.Background())
+	if err != nil {
+		t.Fatalf("PersistentVolumeClaims: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(PVCs) = %d, want 1", len(got))
+	}
+	p := got[0]
+	if p.Namespace != "priset" || p.Name != "priset-data" || p.Phase != "Bound" || p.StorageClass != "longhorn" {
+		t.Errorf("p = %+v, want priset/priset-data Bound on longhorn", p)
+	}
+	if len(p.AccessModes) != 1 || p.AccessModes[0] != "ReadWriteOnce" {
+		t.Errorf("AccessModes = %v, want [ReadWriteOnce]", p.AccessModes)
+	}
+	if p.CapacityBytes != 5*1<<30 {
+		t.Errorf("CapacityBytes = %v, want %v (5Gi)", p.CapacityBytes, 5*1<<30)
+	}
+}
+
+func TestServices(t *testing.T) {
+	c := routes(t, map[string]string{"/api/v1/services": `{"items":[
+	 {"metadata":{"name":"k3s-dash","namespace":"k3s-dash"},
+	  "spec":{"type":"ClusterIP","clusterIP":"10.43.54.248","ports":[{"port":80,"protocol":"TCP"}]}}
+	]}`})
+	got, err := c.Services(context.Background())
+	if err != nil {
+		t.Fatalf("Services: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(Services) = %d, want 1", len(got))
+	}
+	s := got[0]
+	if s.Namespace != "k3s-dash" || s.Name != "k3s-dash" || s.Type != "ClusterIP" || s.ClusterIP != "10.43.54.248" {
+		t.Errorf("s = %+v, want k3s-dash/k3s-dash ClusterIP 10.43.54.248", s)
+	}
+	if len(s.Ports) != 1 || s.Ports[0].Port != 80 || s.Ports[0].Protocol != "TCP" {
+		t.Errorf("Ports = %+v, want one port 80/TCP", s.Ports)
+	}
+}
+
 func TestMatchesSelector(t *testing.T) {
 	tests := []struct {
 		name     string

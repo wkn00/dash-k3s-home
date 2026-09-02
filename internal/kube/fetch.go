@@ -230,6 +230,152 @@ func (c *Client) Workloads(ctx context.Context) ([]Workload, error) {
 	return out, nil
 }
 
+func (c *Client) Namespaces(ctx context.Context) ([]Namespace, error) {
+	var raw struct {
+		Items []struct {
+			Metadata objectMeta `json:"metadata"`
+			Status   struct {
+				Phase string `json:"phase"`
+			} `json:"status"`
+		} `json:"items"`
+	}
+	if err := c.GetJSON(ctx, "/api/v1/namespaces", &raw); err != nil {
+		return nil, err
+	}
+	out := make([]Namespace, 0, len(raw.Items))
+	for _, item := range raw.Items {
+		out = append(out, Namespace{
+			Name:      item.Metadata.Name,
+			Phase:     item.Status.Phase,
+			CreatedAt: item.Metadata.CreationTimestamp,
+		})
+	}
+	return out, nil
+}
+
+func (c *Client) ResourceQuotas(ctx context.Context) ([]ResourceQuota, error) {
+	var raw struct {
+		Items []struct {
+			Metadata objectMeta `json:"metadata"`
+			Status   struct {
+				Hard map[string]string `json:"hard"`
+				Used map[string]string `json:"used"`
+			} `json:"status"`
+		} `json:"items"`
+	}
+	if err := c.GetJSON(ctx, "/api/v1/resourcequotas", &raw); err != nil {
+		return nil, err
+	}
+	out := make([]ResourceQuota, 0, len(raw.Items))
+	for _, item := range raw.Items {
+		out = append(out, ResourceQuota{
+			Namespace: item.Metadata.Namespace,
+			Name:      item.Metadata.Name,
+			Hard:      item.Status.Hard,
+			Used:      item.Status.Used,
+		})
+	}
+	return out, nil
+}
+
+func (c *Client) LimitRanges(ctx context.Context) ([]LimitRange, error) {
+	var raw struct {
+		Items []struct {
+			Metadata objectMeta `json:"metadata"`
+			Spec     struct {
+				Limits []struct {
+					Type           string            `json:"type"`
+					Default        map[string]string `json:"default"`
+					DefaultRequest map[string]string `json:"defaultRequest"`
+					Min            map[string]string `json:"min"`
+					Max            map[string]string `json:"max"`
+				} `json:"limits"`
+			} `json:"spec"`
+		} `json:"items"`
+	}
+	if err := c.GetJSON(ctx, "/api/v1/limitranges", &raw); err != nil {
+		return nil, err
+	}
+	out := make([]LimitRange, 0, len(raw.Items))
+	for _, item := range raw.Items {
+		lr := LimitRange{Namespace: item.Metadata.Namespace, Name: item.Metadata.Name}
+		for _, l := range item.Spec.Limits {
+			lr.Limits = append(lr.Limits, LimitRangeItem{
+				Type: l.Type, Default: l.Default, DefaultRequest: l.DefaultRequest, Min: l.Min, Max: l.Max,
+			})
+		}
+		out = append(out, lr)
+	}
+	return out, nil
+}
+
+func (c *Client) PersistentVolumeClaims(ctx context.Context) ([]PersistentVolumeClaim, error) {
+	var raw struct {
+		Items []struct {
+			Metadata objectMeta `json:"metadata"`
+			Spec     struct {
+				StorageClassName string   `json:"storageClassName"`
+				AccessModes      []string `json:"accessModes"`
+			} `json:"spec"`
+			Status struct {
+				Phase    string `json:"phase"`
+				Capacity struct {
+					Storage string `json:"storage"`
+				} `json:"capacity"`
+			} `json:"status"`
+		} `json:"items"`
+	}
+	if err := c.GetJSON(ctx, "/api/v1/persistentvolumeclaims", &raw); err != nil {
+		return nil, err
+	}
+	out := make([]PersistentVolumeClaim, 0, len(raw.Items))
+	for _, item := range raw.Items {
+		p := PersistentVolumeClaim{
+			Namespace:    item.Metadata.Namespace,
+			Name:         item.Metadata.Name,
+			Phase:        item.Status.Phase,
+			StorageClass: item.Spec.StorageClassName,
+			AccessModes:  item.Spec.AccessModes,
+		}
+		p.CapacityBytes, _ = ParseQuantity(item.Status.Capacity.Storage)
+		out = append(out, p)
+	}
+	return out, nil
+}
+
+func (c *Client) Services(ctx context.Context) ([]Service, error) {
+	var raw struct {
+		Items []struct {
+			Metadata objectMeta `json:"metadata"`
+			Spec     struct {
+				Type      string `json:"type"`
+				ClusterIP string `json:"clusterIP"`
+				Ports     []struct {
+					Port     int    `json:"port"`
+					Protocol string `json:"protocol"`
+				} `json:"ports"`
+			} `json:"spec"`
+		} `json:"items"`
+	}
+	if err := c.GetJSON(ctx, "/api/v1/services", &raw); err != nil {
+		return nil, err
+	}
+	out := make([]Service, 0, len(raw.Items))
+	for _, item := range raw.Items {
+		s := Service{
+			Namespace: item.Metadata.Namespace,
+			Name:      item.Metadata.Name,
+			Type:      item.Spec.Type,
+			ClusterIP: item.Spec.ClusterIP,
+		}
+		for _, p := range item.Spec.Ports {
+			s.Ports = append(s.Ports, ServicePort{Port: p.Port, Protocol: p.Protocol})
+		}
+		out = append(out, s)
+	}
+	return out, nil
+}
+
 func (c *Client) Warnings(ctx context.Context) ([]Event, error) {
 	var raw struct {
 		Items []struct {

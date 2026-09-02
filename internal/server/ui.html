@@ -297,6 +297,12 @@
   .drill-row .name { overflow-wrap: anywhere; }
   .drill-row .meta { font-size: 11px; color: var(--text-muted); overflow-wrap: anywhere; }
   .drill-row .pill { flex: none; }
+  /* Namespace rows drill into their own modal, same click affordance as a
+     device card. */
+  .drill-row[role="button"] { cursor: pointer; border-radius: 6px; }
+  .drill-row[role="button"]:hover, .drill-row[role="button"]:focus-visible {
+    background: var(--accent-bg); outline: none;
+  }
 
   /* Warnings read as alerts, not table rows: an icon chip and a left
      accent bar so a noisy cluster is scannable by shape, not just text. */
@@ -353,6 +359,10 @@
     <div class="cards" id="nodes"></div>
   </section>
   <section>
+    <h3 id="namespaces-heading">Namespaces</h3>
+    <div class="card"><ul class="drill-list" id="namespaces"></ul></div>
+  </section>
+  <section>
     <h3 id="workloads-heading">Workloads</h3>
     <div class="card"><ul class="drill-list" id="workloads"></ul></div>
   </section>
@@ -368,6 +378,13 @@
     <button type="button" class="modal-close" id="modal-close" aria-label="Close">&times;</button>
   </div>
   <div class="modal-body" id="modal-body"></div>
+</dialog>
+<dialog class="device-modal" id="namespace-modal">
+  <div class="modal-head">
+    <h3 id="namespace-modal-title"></h3>
+    <button type="button" class="modal-close" id="namespace-modal-close" aria-label="Close">&times;</button>
+  </div>
+  <div class="modal-body" id="namespace-modal-body"></div>
 </dialog>
 <script>
 const SVGNS = "http://www.w3.org/2000/svg";
@@ -693,6 +710,113 @@ function drillPodRow(p) {
   return drillRow(p.name, bits.join(" · "), p.healthy ? "good" : "critical", p.phase);
 }
 
+// Quota keys carry their unit in the name (limits.cpu, requests.memory,
+// pods, count/services, ...) — there is no separate unit field in the
+// Kubernetes API, so the resource name is what tells cores from bytes
+// from a plain object count.
+function fmtQuotaValue(resource, v) {
+  if (resource.includes("cpu")) return (v < 10 && v % 1 !== 0 ? v.toFixed(2) : v.toFixed(0)) + " cores";
+  if (resource.includes("memory") || resource.includes("storage")) return fmtBytes(v);
+  return String(Math.round(v));
+}
+
+function fmtKV(m) {
+  return Object.entries(m || {}).map(([k, v]) => k + "=" + v).join(", ");
+}
+
+function drillQuotaRow(q) {
+  const sev = level(q.percent, 80, 95);
+  const pillText = has(q.percent) ? q.percent.toFixed(0) + "%" : "—";
+  return drillRow(q.resource, fmtQuotaValue(q.resource, q.used) + " / " + fmtQuotaValue(q.resource, q.hard),
+    sev === "critical" ? "critical" : "plain", pillText);
+}
+
+function drillLimitRangeRow(item) {
+  const parts = [];
+  if (Object.keys(item.default || {}).length) parts.push("default " + fmtKV(item.default));
+  if (Object.keys(item.defaultRequest || {}).length) parts.push("request " + fmtKV(item.defaultRequest));
+  if (Object.keys(item.min || {}).length) parts.push("min " + fmtKV(item.min));
+  if (Object.keys(item.max || {}).length) parts.push("max " + fmtKV(item.max));
+  return drillRow(item.type, parts.join(" · "), "plain", "limit");
+}
+
+function drillPVCRow(p) {
+  const bits = [p.storageClass || "no storage class", fmtBytes(p.capacityBytes)];
+  if (p.accessModes && p.accessModes.length) bits.push(p.accessModes.join(", "));
+  return drillRow(p.name, bits.join(" · "), p.bound ? "good" : "critical", p.phase);
+}
+
+function drillServiceRow(s) {
+  const ports = (s.ports || []).map(p => p.port + "/" + p.protocol).join(", ");
+  const bits = [s.clusterIP || "—"];
+  if (ports) bits.push(ports);
+  return drillRow(s.name, bits.join(" · "), "plain", s.type);
+}
+
+// A namespace row is itself a click target for its own drill-down modal,
+// the same affordance a device card uses for its pods/workloads pop-out.
+function drillNamespaceRow(ns) {
+  const bits = [ns.phase, ns.podCount + (ns.podCount === 1 ? " pod" : " pods")];
+  if (ns.workloadCount) {
+    bits.push((ns.workloadCount - ns.unhealthyWorkloads) + "/" + ns.workloadCount + " workloads healthy");
+  }
+  const healthy = ns.unhealthyWorkloads === 0;
+  const li = drillRow(ns.name, bits.join(" · "), healthy ? "good" : "critical", healthy ? "ok" : "degraded");
+  li.setAttribute("role", "button");
+  li.tabIndex = 0;
+  li.setAttribute("aria-haspopup", "dialog");
+  li.addEventListener("click", () => openNamespaceModal(ns));
+  li.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openNamespaceModal(ns); }
+  });
+  return li;
+}
+
+function openNamespaceModal(ns) {
+  document.getElementById("namespace-modal-title").textContent = ns.name;
+  const body = document.getElementById("namespace-modal-body");
+  body.replaceChildren();
+
+  if (ns.quota.length) {
+    body.appendChild(el("h4", null, "Quota"));
+    const ql = el("ul", "drill-list");
+    ql.replaceChildren(...ns.quota.map(drillQuotaRow));
+    body.appendChild(ql);
+  }
+  if (ns.limitRanges.length) {
+    body.appendChild(el("h4", null, "Limit ranges"));
+    const ll = el("ul", "drill-list");
+    ll.replaceChildren(...ns.limitRanges.map(drillLimitRangeRow));
+    body.appendChild(ll);
+  }
+
+  body.appendChild(el("h4", null, "PVCs (" + ns.pvcs.length + ")"));
+  if (ns.pvcs.length) {
+    const pl = el("ul", "drill-list");
+    pl.replaceChildren(...ns.pvcs.map(drillPVCRow));
+    body.appendChild(pl);
+  } else {
+    body.appendChild(el("div", "empty", "No PVCs in this namespace."));
+  }
+
+  body.appendChild(el("h4", null, "Services (" + ns.services.length + ")"));
+  if (ns.services.length) {
+    const sl = el("ul", "drill-list");
+    sl.replaceChildren(...ns.services.map(drillServiceRow));
+    body.appendChild(sl);
+  } else {
+    body.appendChild(el("div", "empty", "No services in this namespace."));
+  }
+
+  document.getElementById("namespace-modal").showModal();
+}
+
+function initNamespaceModal() {
+  const modal = document.getElementById("namespace-modal");
+  modal.addEventListener("click", e => { if (e.target === modal) modal.close(); });
+  document.getElementById("namespace-modal-close").addEventListener("click", () => modal.close());
+}
+
 // One 14px glyph per chassis class, drawn on currentColor so it themes with
 // the badge colour around it. The word is always rendered too — the shape
 // narrows the search, it never carries the meaning alone.
@@ -1003,6 +1127,15 @@ function render(s) {
   document.getElementById("devices-heading").textContent =
     nodes.length === 1 ? "Device" : nodes.length + " devices";
 
+  document.getElementById("namespaces-heading").textContent =
+    s.namespaces.length === 1 ? "1 namespace" : s.namespaces.length + " namespaces";
+  const namespacesList = document.getElementById("namespaces");
+  if (s.namespaces.length) {
+    namespacesList.replaceChildren(...s.namespaces.map(drillNamespaceRow));
+  } else {
+    namespacesList.replaceChildren(el("li", "empty", "No namespaces reported."));
+  }
+
   document.getElementById("workloads-heading").textContent =
     s.workloads.length === 1 ? "1 workload" : s.workloads.length + " workloads";
   const workloadsList = document.getElementById("workloads");
@@ -1122,6 +1255,7 @@ document.getElementById("logo").appendChild(logoMark());
 initDensity();
 initTheme();
 initDeviceModal();
+initNamespaceModal();
 tick();
 setInterval(tick, 5000);
 </script>

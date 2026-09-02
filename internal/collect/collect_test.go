@@ -34,6 +34,11 @@ func cluster(t *testing.T, fail map[string]int) *kube.Client {
 		"/api/v1/nodes/wk/proxy/stats/summary":  `{"node":{"fs":{"usedBytes":100,"capacityBytes":1000}}}`,
 		"/api/v1/nodes/wk1/proxy/stats/summary": `{"node":{"fs":{"usedBytes":200,"capacityBytes":1000}}}`,
 		"/api/v1/namespaces/k3s-dash/pods":      `{"items":[{"metadata":{"name":"agent-a","namespace":"k3s-dash"},"spec":{"nodeName":"wk"},"status":{"phase":"Running","podIP":"10.42.0.9"}},{"metadata":{"name":"agent-b","namespace":"k3s-dash"},"spec":{"nodeName":"wk1"},"status":{"phase":"Running","podIP":"10.42.1.9"}}]}`,
+		"/api/v1/namespaces":                    `{"items":[{"metadata":{"name":"gsm"},"status":{"phase":"Active"}}]}`,
+		"/api/v1/resourcequotas":                `{"items":[]}`,
+		"/api/v1/limitranges":                   `{"items":[]}`,
+		"/api/v1/persistentvolumeclaims":        `{"items":[]}`,
+		"/api/v1/services":                      `{"items":[]}`,
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if code, ok := fail[r.URL.Path]; ok {
@@ -111,6 +116,22 @@ func TestSampleHealthyCluster(t *testing.T) {
 	}
 }
 
+func TestSampleReadsNamespaceScopedSources(t *testing.T) {
+	_, agentURL := agents(t, nil)
+	got := Sample(context.Background(), cluster(t, nil), http.DefaultClient, opts(agentURL))
+
+	if len(got.Namespaces) != 1 || got.Namespaces[0].Name != "gsm" {
+		t.Errorf("Namespaces = %+v, want one namespace gsm", got.Namespaces)
+	}
+	// Nil vs. empty-but-present all read the same to the caller here; the
+	// fixture returns empty lists, so the fields must be non-nil so a
+	// caller can range over them without a nil check.
+	if got.Quotas == nil || got.LimitRanges == nil || got.PVCs == nil || got.Services == nil {
+		t.Errorf("expected non-nil empty slices, got Quotas=%v LimitRanges=%v PVCs=%v Services=%v",
+			got.Quotas, got.LimitRanges, got.PVCs, got.Services)
+	}
+}
+
 func TestSampleDegradesPerSource(t *testing.T) {
 	tests := []struct {
 		name         string
@@ -158,6 +179,15 @@ func TestSampleDegradesPerSource(t *testing.T) {
 			check: func(t *testing.T, r Raw) {
 				if len(r.Workloads) != 1 {
 					t.Error("workloads disappeared when events failed")
+				}
+			},
+		},
+		{
+			name: "quotas forbidden", failPath: "/api/v1/resourcequotas",
+			wantDegraded: "kubernetes/quotas",
+			check: func(t *testing.T, r Raw) {
+				if len(r.Namespaces) != 1 {
+					t.Error("namespaces disappeared when quotas failed")
 				}
 			},
 		},

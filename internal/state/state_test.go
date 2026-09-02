@@ -176,7 +176,7 @@ func TestSnapshotMarshalsWithStableKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	for _, want := range []string{`"nodes"`, `"workloads"`, `"events"`, `"meta"`, `"sampledAt"`, `"degraded"`, `"series"`} {
+	for _, want := range []string{`"nodes"`, `"workloads"`, `"namespaces"`, `"events"`, `"meta"`, `"sampledAt"`, `"degraded"`, `"series"`} {
 		if !strings.Contains(string(blob), want) {
 			t.Errorf("JSON missing %s", want)
 		}
@@ -236,6 +236,106 @@ func TestAssembleAttributesPodOwnerBySelector(t *testing.T) {
 	}
 	if got := byName["other"].Workload; got != "" {
 		t.Errorf("other Workload = %q, want empty — its labels match no tracked workload", got)
+	}
+}
+
+// namespaceRaw extends baseRaw with the namespace-scoped sources: one
+// namespace ("gsm") carrying a quota, a limit range, a PVC and a service,
+// plus a quota-free, resource-free namespace ("empty-ns") to prove those
+// fields render as empty rather than nil or a panic.
+func namespaceRaw() collect.Raw {
+	raw := baseRaw()
+	raw.Namespaces = []kube.Namespace{
+		{Name: "gsm", Phase: "Active", CreatedAt: raw.At.Add(-48 * time.Hour)},
+		{Name: "empty-ns", Phase: "Active", CreatedAt: raw.At},
+	}
+	raw.Quotas = []kube.ResourceQuota{
+		{Namespace: "gsm", Name: "compute", Hard: map[string]string{"limits.cpu": "4", "pods": "20"},
+			Used: map[string]string{"limits.cpu": "1500m", "pods": "6"}},
+	}
+	raw.LimitRanges = []kube.LimitRange{
+		{Namespace: "gsm", Name: "defaults", Limits: []kube.LimitRangeItem{
+			{Type: "Container", Default: map[string]string{"cpu": "500m"}, Min: map[string]string{"cpu": "50m"}},
+		}},
+	}
+	raw.PVCs = []kube.PersistentVolumeClaim{
+		{Namespace: "gsm", Name: "gsm-data", Phase: "Bound", StorageClass: "longhorn",
+			AccessModes: []string{"ReadWriteOnce"}, CapacityBytes: 5e9},
+	}
+	raw.Services = []kube.Service{
+		{Namespace: "gsm", Name: "gsm-frontend", Type: "ClusterIP", ClusterIP: "10.43.0.1",
+			Ports: []kube.ServicePort{{Port: 80, Protocol: "TCP"}}},
+	}
+	return raw
+}
+
+func TestAssembleRollsUpPodsAndWorkloadsPerNamespace(t *testing.T) {
+	got := Assemble(namespaceRaw(), ring.NewSet(10), 15*time.Second)
+	byName := map[string]Namespace{}
+	for _, ns := range got.Namespaces {
+		byName[ns.Name] = ns
+	}
+	// baseRaw has 3 pods and 1 workload in "gsm" (the nordpil workload/pod
+	// live in a namespace absent from raw.Namespaces on purpose, proving a
+	// namespace with no matching Namespace object just doesn't appear).
+	gsm := byName["gsm"]
+	if gsm.PodCount != 3 {
+		t.Errorf("gsm PodCount = %d, want 3", gsm.PodCount)
+	}
+	if gsm.WorkloadCount != 1 || gsm.UnhealthyWorkloads != 0 {
+		t.Errorf("gsm workload rollup = %+v, want 1 workload, 0 unhealthy", gsm)
+	}
+	empty := byName["empty-ns"]
+	if empty.PodCount != 0 || empty.WorkloadCount != 0 {
+		t.Errorf("empty-ns = %+v, want zero pods and workloads", empty)
+	}
+}
+
+func TestAssembleAttachesQuotaUsage(t *testing.T) {
+	got := Assemble(namespaceRaw(), ring.NewSet(10), 15*time.Second)
+	var gsm Namespace
+	for _, ns := range got.Namespaces {
+		if ns.Name == "gsm" {
+			gsm = ns
+		}
+	}
+	byResource := map[string]QuotaItem{}
+	for _, q := range gsm.Quota {
+		byResource[q.Resource] = q
+	}
+	cpu := byResource["limits.cpu"]
+	if cpu.Hard != 4 || cpu.Used != 1.5 {
+		t.Errorf("limits.cpu quota = %+v, want hard 4, used 1.5", cpu)
+	}
+	if cpu.Percent == nil || *cpu.Percent != 37.5 {
+		t.Errorf("limits.cpu Percent = %v, want 37.5", cpu.Percent)
+	}
+
+	empty := map[string]Namespace{}
+	for _, ns := range got.Namespaces {
+		empty[ns.Name] = ns
+	}
+	if len(empty["empty-ns"].Quota) != 0 {
+		t.Errorf("empty-ns Quota = %+v, want empty (no ResourceQuota object)", empty["empty-ns"].Quota)
+	}
+}
+
+func TestAssembleAttachesLimitRangesPVCsAndServices(t *testing.T) {
+	got := Assemble(namespaceRaw(), ring.NewSet(10), 15*time.Second)
+	var gsm Namespace
+	for _, ns := range got.Namespaces {
+		if ns.Name == "gsm" {
+			gsm = ns
+		}
+	}
+	if len(gsm.LimitRanges) != 1 || gsm.LimitRanges[0].Type != "Container" || gsm.LimitRanges[0].Default["cpu"] != "500m" {
+		t.Errorf("gsm LimitRanges = %+v, want one Container item with default cpu 500m", gsm.LimitRanges)
+	}
+	if len(gsm.PVCs) != 1 || gsm.PVCs[0].Name != "gsm-data" || !gsm.PVCs[0].Bound || gsm.PVCs[0].CapacityBytes != 5e9 {
+		t.Errorf("gsm PVCs = %+v, want one bound gsm-data PVC at 5e9 bytes", gsm.PVCs)
+	}
+	if len(gsm.Services) != 1 || gsm.Services[0].Name != "gsm-frontend" || len(gsm.Services[0].Ports) != 1 {
+		t.Errorf("gsm Services = %+v, want one gsm-frontend service with one port", gsm.Services)
 	}
 }
 

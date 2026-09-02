@@ -48,6 +48,58 @@ type Workload struct {
 	Selector  map[string]string
 }
 
+type Namespace struct {
+	Name      string
+	Phase     string
+	CreatedAt time.Time
+}
+
+// ResourceQuota keeps Hard/Used as raw API quantity strings rather than
+// parsed floats: the key set varies per quota (cpu, memory, pods, object
+// counts, ...) and the state layer parses only the keys it renders.
+type ResourceQuota struct {
+	Namespace string
+	Name      string
+	Hard      map[string]string
+	Used      map[string]string
+}
+
+type LimitRangeItem struct {
+	Type           string
+	Default        map[string]string
+	DefaultRequest map[string]string
+	Min            map[string]string
+	Max            map[string]string
+}
+
+type LimitRange struct {
+	Namespace string
+	Name      string
+	Limits    []LimitRangeItem
+}
+
+type PersistentVolumeClaim struct {
+	Namespace     string
+	Name          string
+	Phase         string
+	StorageClass  string
+	AccessModes   []string
+	CapacityBytes float64
+}
+
+type ServicePort struct {
+	Port     int
+	Protocol string
+}
+
+type Service struct {
+	Namespace string
+	Name      string
+	Type      string
+	ClusterIP string
+	Ports     []ServicePort
+}
+
 type Event struct {
 	At        time.Time
 	Namespace string

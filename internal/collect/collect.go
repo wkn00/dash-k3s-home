@@ -36,15 +36,20 @@ func (o Options) agentURL(p kube.Pod) string {
 }
 
 type Raw struct {
-	At        time.Time
-	Nodes     []kube.Node
-	Pods      []kube.Pod
-	Workloads []kube.Workload
-	Warnings  []kube.Event
-	Usage     map[string]kube.Usage
-	FS        map[string]kube.Filesystem
-	HW        map[string]hw.Snapshot
-	Degraded  []string
+	At          time.Time
+	Nodes       []kube.Node
+	Pods        []kube.Pod
+	Workloads   []kube.Workload
+	Warnings    []kube.Event
+	Namespaces  []kube.Namespace
+	Quotas      []kube.ResourceQuota
+	LimitRanges []kube.LimitRange
+	PVCs        []kube.PersistentVolumeClaim
+	Services    []kube.Service
+	Usage       map[string]kube.Usage
+	FS          map[string]kube.Filesystem
+	HW          map[string]hw.Snapshot
+	Degraded    []string
 }
 
 // gatherer serialises writes from the fan-out goroutines.
@@ -109,6 +114,26 @@ func Sample(ctx context.Context, c *kube.Client, hc *http.Client, opts Options) 
 	})
 	run("kubernetes/agents", func(ctx context.Context) (err error) {
 		agentPods, err = c.PodsMatching(ctx, opts.Namespace, url.QueryEscape(opts.AgentSelector))
+		return err
+	})
+	run("kubernetes/namespaces", func(ctx context.Context) (err error) {
+		raw.Namespaces, err = c.Namespaces(ctx)
+		return err
+	})
+	run("kubernetes/quotas", func(ctx context.Context) (err error) {
+		raw.Quotas, err = c.ResourceQuotas(ctx)
+		return err
+	})
+	run("kubernetes/limitranges", func(ctx context.Context) (err error) {
+		raw.LimitRanges, err = c.LimitRanges(ctx)
+		return err
+	})
+	run("kubernetes/pvcs", func(ctx context.Context) (err error) {
+		raw.PVCs, err = c.PersistentVolumeClaims(ctx)
+		return err
+	})
+	run("kubernetes/services", func(ctx context.Context) (err error) {
+		raw.Services, err = c.Services(ctx)
 		return err
 	})
 	wg.Wait()
