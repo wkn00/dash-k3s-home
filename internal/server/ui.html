@@ -7,77 +7,103 @@
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 18L12 7L18 18Z' fill='none' stroke='%232a78d6' stroke-width='1.6' stroke-linejoin='round'/%3E%3Ccircle cx='6' cy='18' r='2.4' fill='%23f7f7f5' stroke='%232a78d6' stroke-width='1.6'/%3E%3Ccircle cx='18' cy='18' r='2.4' fill='%23f7f7f5' stroke='%232a78d6' stroke-width='1.6'/%3E%3Ccircle cx='12' cy='7' r='2.4' fill='%23f7f7f5' stroke='%232a78d6' stroke-width='1.6'/%3E%3C/svg%3E">
 <style>
   /* Roles, not raw hex, so light/dark swap in one place.
-     Status colours are the fixed status palette and are never themed:
-     warning is deliberately sub-3:1 on the light surface, which is why
-     every severity on this page ships a word as well as a colour. The
-     stat-accent colours (cpu/memory/disk/...) are fixed the same way —
-     they identify a metric category, not a severity, so they must read
-     the same regardless of theme. */
+
+     One neutral ramp, one accent (blue), and the fixed status palette —
+     nothing else carries colour. Metric icons used to each have their own
+     hue; at seven hues the page read as a rainbow and the status colours
+     stopped standing out, so icons are now neutral and only status is
+     coloured. Warning is still deliberately sub-3:1 as a fill on the light
+     surface, which is why every severity on this page ships a word as well
+     as a colour, and why the badge text uses the darker *-ink step.
+
+     Shape scale: panels 12px, controls 8px, badges 6px. Nothing else. */
   :root {
     color-scheme: light;
-    --plane:          #f7f7f5;
-    --surface-1:      #fdfdfc;
-    --surface-2:      #f0f0ec;
-    --text-primary:   #0b0b0b;
-    --text-secondary: #52514e;
-    --text-muted:     #898781;
-    --grid:           #e1e0d9;
-    --border:         rgba(11, 11, 11, 0.10);
-    --accent:         #2a78d6;
-    --accent-soft:    #86b6ef;
-    --accent-bg:      rgba(42, 120, 214, 0.11);
-    --track:          #e4e9ee;
-    --good:           #0ca34f;
-    --good-bg:        rgba(12, 163, 79, 0.12);
-    --warning:        #c9820f;
-    --warning-bg:     rgba(201, 130, 15, 0.14);
-    --critical:       #d03b3b;
-    --critical-bg:    rgba(208, 59, 59, 0.11);
-    --shadow:         0 1px 2px rgba(11, 11, 11, 0.04), 0 4px 14px rgba(11, 11, 11, 0.05);
-    /* Fixed stat-category accents — identify what a KPI/badge is about,
-       not how healthy it is, so unlike --good/--warning/--critical these
-       carry no status meaning and are safe to use decoratively. */
-    --c-devices: #0ea5e9; --c-devices-bg: rgba(14, 165, 233, .13);
-    --c-cpu:     #3b82f6; --c-cpu-bg:     rgba(59, 130, 246, .13);
-    --c-mem:     #8b5cf6; --c-mem-bg:     rgba(139, 92, 246, .13);
-    --c-disk:    #0d9488; --c-disk-bg:    rgba(13, 148, 136, .13);
-    --c-temp:    #ea580c; --c-temp-bg:    rgba(234, 88, 12, .13);
-    --c-power:   #16a34a; --c-power-bg:   rgba(22, 163, 74, .13);
-    --c-work:    #db2777; --c-work-bg:    rgba(219, 39, 119, .13);
+    --plane:          #f4f5f7;
+    --surface-1:      #fefefe;
+    --surface-2:      #f1f2f4;
+    --surface-3:      #e8eaed;
+    --text-primary:   #111318;
+    --text-secondary: #4a505c;
+    --text-muted:     #7b818c;
+    --grid:           #eceef1;
+    --border:         #e1e4e8;
+    --border-strong:  #cfd3d9;
+    --accent:         #2563eb;
+    --accent-soft:    #8fb2f5;
+    --accent-fill:    rgba(37, 99, 235, 0.10);
+    --accent-bg:      rgba(37, 99, 235, 0.08);
+    --track:          #e6e8ec;
+    --good:           #16a34a;
+    --good-ink:       #15803d;
+    --good-bg:        rgba(22, 163, 74, 0.10);
+    --warning:        #d97706;
+    --warning-ink:    #b45309;
+    --warning-bg:     rgba(217, 119, 6, 0.11);
+    --critical:       #dc2626;
+    --critical-ink:   #b91c1c;
+    --critical-bg:    rgba(220, 38, 38, 0.09);
+    --shadow:         0 1px 2px rgba(17, 19, 24, 0.04);
+    --shadow-lg:      0 12px 40px rgba(17, 19, 24, 0.14), 0 2px 6px rgba(17, 19, 24, 0.06);
+    --header-bg:      rgba(244, 245, 247, 0.82);
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Menlo, Consolas, monospace;
   }
   @media (prefers-color-scheme: dark) {
     :root:where(:not([data-theme="light"])) {
       color-scheme: dark;
-      --plane:          #0b0c0d;
-      --surface-1:      #16181a;
-      --surface-2:      #202225;
-      --text-primary:   #f4f4f3;
-      --text-secondary: #c3c2b7;
-      --text-muted:     #8b8d90;
-      --grid:           #2a2c2f;
-      --border:         rgba(255, 255, 255, 0.11);
-      --accent:         #4f97ea;
-      --accent-soft:    #1c5cab;
-      --accent-bg:      rgba(79, 151, 234, 0.16);
-      --track:          #23262a;
-      --shadow:         0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 18px rgba(0, 0, 0, 0.32);
+      --plane:          #0b0c0e;
+      --surface-1:      #131519;
+      --surface-2:      #1b1e23;
+      --surface-3:      #252930;
+      --text-primary:   #eceef1;
+      --text-secondary: #a9aeb8;
+      --text-muted:     #737984;
+      --grid:           #1f2227;
+      --border:         #24282e;
+      --border-strong:  #343941;
+      --accent:         #5b93f5;
+      --accent-soft:    #3a68c4;
+      --accent-fill:    rgba(91, 147, 245, 0.14);
+      --accent-bg:      rgba(91, 147, 245, 0.12);
+      --track:          #262a31;
+      --good-ink:       #4ade80;
+      --good-bg:        rgba(34, 197, 94, 0.13);
+      --warning-ink:    #fbbf24;
+      --warning-bg:     rgba(245, 158, 11, 0.14);
+      --critical-ink:   #f87171;
+      --critical-bg:    rgba(239, 68, 68, 0.14);
+      --shadow:         0 1px 2px rgba(0, 0, 0, 0.4);
+      --shadow-lg:      0 16px 48px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+      --header-bg:      rgba(11, 12, 14, 0.8);
     }
   }
   :root[data-theme="dark"] {
     color-scheme: dark;
-    --plane:          #0b0c0d;
-    --surface-1:      #16181a;
-    --surface-2:      #202225;
-    --text-primary:   #f4f4f3;
-    --text-secondary: #c3c2b7;
-    --text-muted:     #8b8d90;
-    --grid:           #2a2c2f;
-    --border:         rgba(255, 255, 255, 0.11);
-    --accent:         #4f97ea;
-    --accent-soft:    #1c5cab;
-    --accent-bg:      rgba(79, 151, 234, 0.16);
-    --track:          #23262a;
-    --shadow:         0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 18px rgba(0, 0, 0, 0.32);
+    --plane:          #0b0c0e;
+    --surface-1:      #131519;
+    --surface-2:      #1b1e23;
+    --surface-3:      #252930;
+    --text-primary:   #eceef1;
+    --text-secondary: #a9aeb8;
+    --text-muted:     #737984;
+    --grid:           #1f2227;
+    --border:         #24282e;
+    --border-strong:  #343941;
+    --accent:         #5b93f5;
+    --accent-soft:    #3a68c4;
+    --accent-fill:    rgba(91, 147, 245, 0.14);
+    --accent-bg:      rgba(91, 147, 245, 0.12);
+    --track:          #262a31;
+    --good-ink:       #4ade80;
+    --good-bg:        rgba(34, 197, 94, 0.13);
+    --warning-ink:    #fbbf24;
+    --warning-bg:     rgba(245, 158, 11, 0.14);
+    --critical-ink:   #f87171;
+    --critical-bg:    rgba(239, 68, 68, 0.14);
+    --shadow:         0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-lg:      0 16px 48px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+    --header-bg:      rgba(11, 12, 14, 0.8);
   }
 
   * { box-sizing: border-box; }
@@ -85,148 +111,218 @@
     margin: 0;
     background: var(--plane);
     color: var(--text-primary);
-    font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    font: 14px/1.5 var(--sans);
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
   }
-  header {
-    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-    padding: 13px 24px; position: sticky; top: 0; z-index: 20;
-    background: var(--plane); border-bottom: 1px solid var(--border);
-  }
-  .brand { display: flex; align-items: center; gap: 10px; }
-  .brand .logo { color: var(--accent); flex: none; }
-  .brand h1 { font-size: 16px; margin: 0; letter-spacing: -0.01em; font-weight: 700; line-height: 1.2; }
-  .brand .tagline { font-size: 11.5px; color: var(--text-muted); }
-  h3 {
-    font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
-    color: var(--text-muted); margin: 0 0 10px; font-weight: 600;
-  }
-  .grow { flex: 1 1 auto; }
+  .mono { font-family: var(--mono); font-size: 0.92em; }
   .muted { color: var(--text-secondary); font-size: 12px; }
-  /* The spec is context rather than status, so it sits a step further
-     back than .muted, and wraps instead of widening the card when a
-     distro ships a long os-release string. */
-  .spec { color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
-  main { padding: 24px 24px 48px; display: grid; gap: 26px; transition: opacity .2s ease; max-width: 1600px; margin: 0 auto; }
+
+  /* ---------- Header ---------- */
+  header {
+    position: sticky; top: 0; z-index: 20;
+    background: var(--header-bg); border-bottom: 1px solid var(--border);
+    -webkit-backdrop-filter: saturate(160%) blur(12px); backdrop-filter: saturate(160%) blur(12px);
+  }
+  .header-inner {
+    max-width: 1600px; margin: 0 auto; padding: 10px 28px;
+    display: flex; align-items: center; gap: 12px 16px; flex-wrap: wrap; min-height: 60px;
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .brand .logo {
+    width: 32px; height: 32px; border-radius: 8px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--text-primary); color: var(--plane);
+  }
+  .brand h1 { font-size: 15px; margin: 0; letter-spacing: -0.01em; font-weight: 650; line-height: 1.2; }
+  .brand .tagline { font-size: 12px; color: var(--text-muted); line-height: 1.3; }
+  .grow { flex: 1 1 auto; }
+
+  /* Live sample indicator: a pulsing dot reads as "this is moving" at a
+     glance — a plain timestamp doesn't communicate liveness on its own. */
+  .live {
+    display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary);
+    padding: 0 2px 0 14px; margin-left: 4px; border-left: 1px solid var(--border); height: 28px;
+  }
+  .live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--good); flex: none; position: relative; }
+  .live .dot::after {
+    content: ""; position: absolute; inset: -3px; border-radius: 50%;
+    background: var(--good); opacity: 0;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .live:not(.stale) .dot::after { animation: live-ping 2s cubic-bezier(0, 0, .2, 1) infinite; }
+  }
+  .live.stale .dot, .live.stale .dot::after { background: var(--critical); }
+  @keyframes live-ping { 0% { transform: scale(.6); opacity: .45; } 80%, 100% { transform: scale(1.6); opacity: 0; } }
+
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; }
+  .toggle {
+    display: inline-flex; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--surface-2); padding: 2px; gap: 2px;
+  }
+  .toggle button {
+    font: inherit; font-size: 12px; font-weight: 500; color: var(--text-muted); cursor: pointer;
+    background: none; border: 0; border-radius: 6px; padding: 3px 10px; line-height: 20px;
+    transition: color .15s ease, background-color .15s ease;
+  }
+  .toggle button:hover { color: var(--text-primary); }
+  .toggle button[aria-pressed="true"] {
+    background: var(--surface-1); color: var(--text-primary);
+    box-shadow: 0 0 0 1px var(--border), var(--shadow);
+  }
+  .toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* ---------- Layout ---------- */
+  main {
+    padding: 24px 28px 48px; display: grid; gap: 32px;
+    transition: opacity .2s ease; max-width: 1600px; margin: 0 auto;
+  }
   /* Refetch failure holds the previous render rather than flashing a
      skeleton — no layout jump, and the numbers stay readable. */
   main.stale { opacity: .55; }
+  section { min-width: 0; }
+  .section-head { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+  .section-head h2 { font-size: 14px; font-weight: 650; margin: 0; letter-spacing: -0.005em; }
+  .count {
+    font-size: 11.5px; font-weight: 600; color: var(--text-secondary);
+    background: var(--surface-3); border-radius: 6px; padding: 0 7px; line-height: 20px;
+  }
+  .count:empty { display: none; }
+  .section-head .hint { margin-left: auto; font-size: 12px; color: var(--text-muted); }
 
-  /* Live sample indicator: a pulsing dot reads as "this is moving" at a
-     glance, the way a real-time dashboard should — a plain timestamp
-     doesn't communicate liveness on its own. */
-  .live {
-    display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text-secondary);
+  .panel {
     background: var(--surface-1); border: 1px solid var(--border);
-    padding: 5px 11px 5px 9px; border-radius: 999px;
+    border-radius: 12px; box-shadow: var(--shadow); overflow: hidden;
   }
-  .live .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); flex: none; }
-  .live:not(.stale) .dot { animation: live-pulse 2s ease-in-out infinite; }
-  .live.stale .dot { background: var(--critical); }
-  @keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
-
-  .toggle {
-    display: inline-flex; border: 1px solid var(--border); border-radius: 999px;
-    background: var(--surface-1); padding: 2px; gap: 2px;
-  }
-  .toggle button {
-    font: inherit; font-size: 12px; color: var(--text-secondary); cursor: pointer;
-    background: none; border: 0; border-radius: 999px; padding: 3px 11px;
-  }
-  .toggle button[aria-pressed="true"] { background: var(--surface-2); color: var(--text-primary); font-weight: 600; }
-  .toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
   .banner {
-    display: none; padding: 9px 12px; border-radius: 8px; font-size: 13px;
-    border: 1px solid var(--warning); background: var(--surface-1);
-    color: var(--text-primary);
+    display: none; align-items: flex-start; gap: 10px;
+    padding: 10px 14px; border-radius: 12px; font-size: 13px;
+    border: 1px solid color-mix(in srgb, var(--warning) 35%, transparent);
+    background: var(--warning-bg); color: var(--text-primary);
   }
-  .banner.on { display: block; }
-  .banner b { color: var(--text-primary); }
+  .banner.on { display: flex; }
+  .banner svg { color: var(--warning-ink); flex: none; margin-top: 1px; }
 
-  .card {
-    background: var(--surface-1); border: 1px solid var(--border); border-left: 4px solid var(--border);
-    border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow);
-  }
-  .card.sev-warning { border-left-color: var(--warning); }
-  .card.sev-critical { border-left-color: var(--critical); }
-
-  /* Overview: one card per fleet metric, each with a colour-coded icon
-     badge, instead of one dense card everything was crammed into — this
-     is the "can I tell what's wrong in one glance" row. */
-  .kpis { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); }
-  .kpi {
-    background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px;
-    padding: 15px 16px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px;
-    min-width: 0; border-top: 3px solid transparent;
-  }
-  .kpi.sev-warning { border-top-color: var(--warning); }
-  .kpi.sev-critical { border-top-color: var(--critical); }
-  .kpi.wide { grid-column: span 2; }
-  .kpi-top { display: flex; align-items: center; gap: 10px; }
-  .badge {
-    width: 32px; height: 32px; border-radius: 9px; display: flex; align-items: center;
-    justify-content: center; flex: none;
-  }
-  .badge.devices { background: var(--c-devices-bg); color: var(--c-devices); }
-  .badge.cpu     { background: var(--c-cpu-bg);     color: var(--c-cpu); }
-  .badge.memory  { background: var(--c-mem-bg);     color: var(--c-mem); }
-  .badge.disk    { background: var(--c-disk-bg);    color: var(--c-disk); }
-  .badge.temp    { background: var(--c-temp-bg);    color: var(--c-temp); }
-  .badge.power   { background: var(--c-power-bg);   color: var(--c-power); }
-  .badge.work    { background: var(--c-work-bg);    color: var(--c-work); }
-  .badge.identity{ background: var(--accent-bg);    color: var(--accent); }
-  .kpi-label { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); font-weight: 600; }
-  .kpi-readout { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0; }
-  .kpi-value { font-size: 25px; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-  .kpi-value .of { color: var(--text-muted); font-weight: 400; font-size: 0.6em; }
-  .kpi.wide .kpi-value { font-size: 38px; }
-  .kpi-note { font-size: 11.5px; color: var(--text-muted); overflow-wrap: anywhere; }
-  .kpi-viz { height: 24px; margin-top: -4px; }
-  .kpi-viz svg { max-width: 100%; }
-
-  .cards { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
-  .card h2 { font-size: 15px; margin: 0 0 3px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 600; }
-  .card h2 .alias { color: var(--text-muted); font-weight: 400; font-size: 12px; }
-
-  /* The device line answers "which box is this?" — a colour-badged icon
-     plus the words, so identity reads before any number does. */
-  .device { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); margin: 8px 0 4px; }
-  .device .badge { width: 26px; height: 26px; border-radius: 8px; }
-  .device .badge svg { width: 15px; height: 15px; }
-  .device .class { text-transform: lowercase; }
-  .device .model { color: var(--text-primary); font-weight: 500; overflow-wrap: anywhere; }
-  .device.unknown { color: var(--text-muted); font-style: italic; }
-  .device.unknown .badge { background: var(--surface-2); color: var(--text-muted); }
-
-  .pill { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; font-weight: 500; }
-  .pill.good { color: var(--good); }
-  .pill.critical { color: var(--critical); }
-  .pill.plain { color: var(--text-muted); }
-
-  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--grid); }
-  .stats .tile.wide { grid-column: 1 / -1; }
-  .stats .label { font-size: 11px; }
-  .stats .value { font-size: 13.5px; font-weight: 600; }
-  .stats .viz { height: 22px; display: flex; align-items: center; margin-top: auto; }
-  .viz svg { max-width: 100%; }
-
-  .tile { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-  .tile .head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
-  .tile .readout { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 5px; min-width: 0; }
-  .tile .value { white-space: nowrap; }
-  .tile .label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); font-weight: 600; }
-  .tile .note { font-size: 11px; color: var(--text-muted); overflow-wrap: anywhere; }
-
+  /* ---------- Severity, badges, meters ---------- */
   /* Severity is carried by a word plus the colour, never the colour alone,
      and never by recolouring the value itself. */
-  .sev { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; font-weight: 600; padding: 1px 5px; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; }
-  .sev.warning { color: var(--warning); }
-  .sev.critical { color: var(--critical); }
+  .sev {
+    font-size: 11px; font-weight: 600; line-height: 18px; padding: 0 6px;
+    border-radius: 6px; white-space: nowrap;
+  }
+  .sev.warning  { color: var(--warning-ink);  background: var(--warning-bg); }
+  .sev.critical { color: var(--critical-ink); background: var(--critical-bg); }
 
-  .meter { height: 7px; width: 100%; max-width: 130px; border-radius: 4px; background: var(--track); overflow: hidden; }
-  .meter > i { display: block; height: 100%; background: var(--accent); }
+  /* Status pills: a tinted chip with a leading dot. The dot is the one
+     place a status dot appears — it marks real state, not decoration. */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+    font-size: 11.5px; font-weight: 600; line-height: 20px; padding: 0 8px;
+    border-radius: 6px; white-space: nowrap;
+  }
+  .pill.good, .pill.critical, .pill.warning { padding-left: 7px; }
+  .pill.good::before, .pill.critical::before, .pill.warning::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+  }
+  .pill.good     { color: var(--good-ink);     background: var(--good-bg); }
+  .pill.warning  { color: var(--warning-ink);  background: var(--warning-bg); }
+  .pill.critical { color: var(--critical-ink); background: var(--critical-bg); }
+  .pill.plain    { color: var(--text-secondary); background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--border); }
+
+  .meter { height: 6px; width: 100%; border-radius: 3px; background: var(--track); overflow: hidden; }
+  .meter > i { display: block; height: 100%; border-radius: 3px; background: var(--accent); }
   .meter > i.warning { background: var(--warning); }
   .meter > i.critical { background: var(--critical); }
+
+  /* Neutral icon chip. Colour here would have to mean something, and the
+     only things on this page that mean something are status. */
+  .badge {
+    width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center;
+    justify-content: center; flex: none; background: var(--surface-2); color: var(--text-secondary);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+
+  /* ---------- Overview strip ---------- */
+  /* One panel, one cell per fleet metric, hairlines between cells. The
+     negative right/bottom margin hides the outer edge of the last column
+     and row, so the grid can wrap to any width without a dangling border
+     or an orphaned card on its own row. */
+  .kpis {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    margin: 0 -1px -1px 0;
+  }
+  .kpi {
+    padding: 16px 18px 14px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+    border-right: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .kpi.sev-warning::before, .kpi.sev-critical::before {
+    content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px;
+  }
+  .kpi.sev-warning::before { background: var(--warning); }
+  .kpi.sev-critical::before { background: var(--critical); }
+  .kpi-top { display: flex; align-items: center; gap: 7px; color: var(--text-muted); }
+  .kpi-top svg { flex: none; }
+  .kpi-label { font-size: 12.5px; color: var(--text-secondary); font-weight: 500; }
+  .kpi-readout { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; min-height: 34px; }
+  .kpi-value { font-size: 24px; font-weight: 650; letter-spacing: -0.025em; line-height: 1.2; }
+  .kpi-value .of { color: var(--text-muted); font-weight: 500; font-size: 0.7em; letter-spacing: 0; }
+  .kpi-note { font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; min-height: 18px; }
+  .kpi-viz { height: 24px; display: flex; align-items: center; }
+  .kpi-viz svg { max-width: 100%; }
+
+  /* ---------- Device cards ---------- */
+  .cards { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 18px 14px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; min-width: 0;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  /* The worst metric on the card tints its edge and draws a 2px rule at
+     the top, so trouble is visible from across the room before anyone
+     reads a number. */
+  .card.sev-warning  { border-color: color-mix(in srgb, var(--warning) 45%, var(--border)); box-shadow: inset 0 2px 0 var(--warning), var(--shadow); }
+  .card.sev-critical { border-color: color-mix(in srgb, var(--critical) 45%, var(--border)); box-shadow: inset 0 2px 0 var(--critical), var(--shadow); }
+
+  .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .card-title { min-width: 0; }
+  .card h3 {
+    font-size: 15px; margin: 0; font-weight: 650; letter-spacing: -0.01em; line-height: 1.35;
+    display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  }
+  .card h3 .alias { color: var(--text-muted); font-weight: 400; font-size: 12px; font-family: var(--mono); letter-spacing: 0; }
+  .card-pills { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+
+  /* The device line answers "which box is this?" — an icon plus the
+     words, so identity reads before any number does. */
+  .device { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-secondary); margin: 12px 0 0; min-width: 0; }
+  .device .who { display: flex; flex-direction: column; min-width: 0; line-height: 1.35; }
+  .device .model { color: var(--text-primary); font-weight: 500; overflow-wrap: anywhere; }
+  .device .class { font-size: 12px; color: var(--text-muted); }
+  .device.unknown { color: var(--text-muted); font-style: italic; cursor: help; }
+
+  /* The spec is context rather than status, so it sits a step further
+     back, and wraps instead of widening the card when a distro ships a
+     long os-release string. */
+  .spec { color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; margin-top: 10px; line-height: 1.55; }
+  .spec + .spec { margin-top: 0; }
+
+  .stats {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px;
+    margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--grid);
+  }
+  .stats .tile.wide { grid-column: 1 / -1; }
+  .stats .viz { height: 24px; display: flex; align-items: center; }
+  .viz svg { max-width: 100%; }
+
+  .tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .tile .head { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .tile .readout { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 2px 6px; min-width: 0; }
+  .tile .value { white-space: nowrap; font-size: 13.5px; font-weight: 600; }
+  .tile .label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  .tile .note { font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
 
   /* Detailed density restores the full-width metric rows: one metric per
      line, label and reading on the same baseline as the trend.
@@ -236,153 +332,237 @@
      in reading order — label, trend, reading, severity. Rebuilding the DOM
      instead would mean the toggle could not take effect until the next
      poll, which is a poor trade for a viewing preference. */
-  .detailed .stats { grid-template-columns: 1fr; gap: 9px; }
+  .detailed .stats { grid-template-columns: 1fr; gap: 10px; }
   .detailed .stats .tile,
   .detailed .stats .tile.wide {
     display: grid; grid-column: 1 / -1;
-    grid-template-columns: 62px 1fr auto;
-    gap: 4px 10px; align-items: center;
+    grid-template-columns: 64px 1fr auto;
+    gap: 4px 12px; align-items: center;
   }
   .detailed .stats .head { display: contents; }
   .detailed .stats .label   { order: 1; }
-  .detailed .stats .viz     { order: 2; height: 26px; margin-top: 0; }
-  .detailed .stats .readout { order: 3; justify-content: flex-end; }
+  .detailed .stats .viz     { order: 2; height: 26px; }
+  .detailed .stats .readout { order: 3; }
   .detailed .stats .note    { order: 4; grid-column: 2 / -1; }
-  .detailed .cards { grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); }
+  .detailed .cards { grid-template-columns: repeat(auto-fill, minmax(370px, 1fr)); }
 
   /* The whole card is the click target for its pop-out modal, so it needs
      its own hover/focus affordance rather than a small button's. */
   .card.clickable { cursor: pointer; }
-  .card.clickable:hover, .card.clickable:focus-visible {
-    border-color: var(--accent); outline: none;
-  }
-  .card.clickable:focus-visible { box-shadow: var(--shadow), 0 0 0 2px var(--accent-bg); }
+  .card.clickable:hover { border-color: var(--border-strong); }
+  .card.clickable.sev-warning:hover  { border-color: var(--warning); }
+  .card.clickable.sev-critical:hover { border-color: var(--critical); }
+  .card.clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  /* The pop-out itself: a native <dialog>, so Escape-to-close, the
-     backdrop and focus trapping all come for free instead of being
-     hand-rolled and hand-debugged. */
-  .device-modal {
-    border: 1px solid var(--border); border-radius: 14px; padding: 0;
-    background: var(--surface-1); color: var(--text-primary); box-shadow: var(--shadow);
-    width: min(560px, 92vw); max-height: 82vh;
+  /* ---------- Tables (namespaces, workloads) ---------- */
+  .split { display: grid; gap: 32px; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); align-items: start; }
+  @media (max-width: 1100px) { .split { grid-template-columns: minmax(0, 1fr); } }
+
+  table.data { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.data th {
+    text-align: left; font-weight: 500; font-size: 12px; color: var(--text-muted);
+    padding: 9px 16px; background: var(--surface-2); border-bottom: 1px solid var(--border);
+    white-space: nowrap;
   }
-  .device-modal::backdrop { background: rgba(10, 10, 10, 0.5); }
+  table.data td { padding: 10px 16px; border-bottom: 1px solid var(--grid); vertical-align: middle; }
+  table.data tr:last-child td { border-bottom: 0; }
+  table.data .num { text-align: right; white-space: nowrap; }
+  table.data .end { text-align: right; width: 1%; white-space: nowrap; }
+  table.data .name { font-weight: 500; overflow-wrap: anywhere; }
+  table.data .sub { color: var(--text-secondary); }
+  table.data .dim { color: var(--text-muted); }
+  table.data td.empty { color: var(--text-muted); text-align: center; padding: 22px 16px; }
+  /* Namespace rows drill into their own modal. The name is a real button
+     (keyboard + screen reader), the row is the larger mouse target. */
+  table.data tr.drill { cursor: pointer; }
+  table.data tr.drill:hover td { background: var(--surface-2); }
+  .row-link {
+    font: inherit; font-weight: 500; color: inherit; background: none; border: 0; padding: 0;
+    cursor: pointer; text-align: left; border-radius: 4px;
+  }
+  .row-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chev { color: var(--text-muted); display: inline-flex; vertical-align: middle; margin-left: 6px; }
+  @media (max-width: 640px) {
+    table.data .hide-sm { display: none; }
+    table.data th, table.data td { padding-left: 12px; padding-right: 12px; }
+  }
+
+  /* ---------- Warnings ---------- */
+  ul.events { list-style: none; margin: 0; padding: 0; }
+  .alert { display: flex; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--grid); }
+  .alert:last-child { border-bottom: 0; }
+  .alert-icon {
+    flex: none; width: 28px; height: 28px; border-radius: 8px;
+    background: var(--warning-bg); color: var(--warning-ink); display: flex; align-items: center; justify-content: center;
+  }
+  .alert-body { min-width: 0; flex: 1; }
+  .alert-head { display: flex; flex-wrap: wrap; gap: 2px 8px; align-items: center; }
+  .alert-head strong { font-weight: 600; font-size: 13.5px; }
+  .alert-head .obj { color: var(--text-secondary); font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; }
+  .alert-head .when { margin-left: auto; color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+  .alert .msg { color: var(--text-secondary); font-size: 12.5px; margin-top: 3px; overflow-wrap: anywhere; }
+  .empty { color: var(--text-muted); font-size: 13px; padding: 18px 16px; text-align: center; }
+  .empty.ok { display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .empty.ok svg { color: var(--good); }
+
+  /* ---------- Modals ---------- */
+  /* A native <dialog>, so Escape-to-close, the backdrop and focus
+     trapping all come for free instead of being hand-rolled. */
+  .device-modal {
+    border: 1px solid var(--border); border-radius: 12px; padding: 0;
+    background: var(--surface-1); color: var(--text-primary); box-shadow: var(--shadow-lg);
+    width: min(640px, calc(100vw - 32px)); max-height: 84vh;
+  }
+  .device-modal::backdrop { background: rgba(8, 9, 11, 0.45); -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); }
+  @media (prefers-reduced-motion: no-preference) {
+    .device-modal[open] { animation: modal-in .16s cubic-bezier(.16, 1, .3, 1); }
+  }
+  @keyframes modal-in { from { opacity: 0; transform: translateY(6px) scale(.99); } }
   .modal-head {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
-    padding: 15px 18px; border-bottom: 1px solid var(--grid);
+    padding: 14px 18px; border-bottom: 1px solid var(--border);
   }
-  .modal-head h3 {
-    margin: 0; font-size: 14.5px; font-weight: 700; letter-spacing: normal;
-    text-transform: none; color: var(--text-primary);
-  }
+  .modal-head h2 { margin: 0; font-size: 15px; font-weight: 650; letter-spacing: -0.01em; }
+  .modal-sub { font-size: 12px; color: var(--text-muted); margin-top: 1px; }
+  .modal-sub:empty { display: none; }
   .modal-close {
-    flex: none; border: 0; background: var(--surface-2); color: var(--text-secondary);
-    width: 28px; height: 28px; border-radius: 8px; cursor: pointer; font-size: 18px; line-height: 1;
+    flex: none; border: 0; background: none; color: var(--text-muted);
+    width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
     display: flex; align-items: center; justify-content: center;
   }
-  .modal-close:hover { background: var(--accent-bg); color: var(--accent); }
+  .modal-close:hover { background: var(--surface-2); color: var(--text-primary); }
   .modal-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .modal-body { padding: 6px 18px 18px; overflow-y: auto; max-height: calc(82vh - 58px); }
+  .modal-body { padding: 4px 18px 18px; overflow-y: auto; max-height: calc(84vh - 62px); }
   .modal-body h4 {
-    font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em;
-    color: var(--text-muted); margin: 14px 0 0; font-weight: 600;
+    font-size: 12px; color: var(--text-secondary); margin: 18px 0 6px; font-weight: 600;
+    display: flex; align-items: center; gap: 6px;
   }
-  .drill-list { list-style: none; margin: 4px 0 0; padding: 0; }
+  .drill-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
   .drill-row {
-    display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
-    padding: 5px 0; border-bottom: 1px solid var(--grid); font-size: 12.5px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 8px 12px; border-bottom: 1px solid var(--grid); font-size: 13px;
   }
   .drill-row:last-child { border-bottom: none; }
   .drill-row .main { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-  .drill-row .name { overflow-wrap: anywhere; }
-  .drill-row .meta { font-size: 11px; color: var(--text-muted); overflow-wrap: anywhere; }
-  .drill-row .pill { flex: none; }
-  /* Namespace rows drill into their own modal, same click affordance as a
-     device card. */
-  .drill-row[role="button"] { cursor: pointer; border-radius: 6px; }
-  .drill-row[role="button"]:hover, .drill-row[role="button"]:focus-visible {
-    background: var(--accent-bg); outline: none;
-  }
+  .drill-row .name { overflow-wrap: anywhere; font-weight: 500; }
+  .drill-row .meta { font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
+  .drill-row .meter { width: 220px; max-width: 100%; margin-top: 5px; }
+  .modal-body .empty { border: 1px dashed var(--border); border-radius: 8px; padding: 12px; }
 
-  /* Warnings read as alerts, not table rows: an icon chip and a left
-     accent bar so a noisy cluster is scannable by shape, not just text. */
-  ul.events { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-  .alert {
-    display: flex; gap: 12px; background: var(--surface-1); border: 1px solid var(--border);
-    border-left: 3px solid var(--warning); border-radius: 10px; padding: 10px 14px; box-shadow: var(--shadow);
+  /* Key/value spec sheet for the device modal: two columns of short
+     facts, so the platform strings that used to crowd the card have
+     somewhere to live. */
+  .facts {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 0;
   }
-  .alert-icon {
-    flex: none; width: 26px; height: 26px; border-radius: 8px; margin-top: 1px;
-    background: var(--warning-bg); color: var(--warning); display: flex; align-items: center; justify-content: center;
+  /* Dividers are drawn as outset shadows so the ones past the last row
+     and column fall outside the box and get clipped — no dangling rules
+     whatever the column count works out to. */
+  .facts > div {
+    display: flex; justify-content: space-between; gap: 12px; padding: 7px 12px;
+    box-shadow: 1px 0 0 var(--grid), 0 1px 0 var(--grid); font-size: 12.5px; min-width: 0;
   }
-  .alert-body { min-width: 0; }
-  .alert-head { display: flex; flex-wrap: wrap; gap: 2px 6px; align-items: baseline; }
-  .alert .msg { color: var(--text-secondary); font-size: 12px; margin-top: 2px; }
-  .empty { color: var(--text-muted); font-size: 13px; padding: 10px 2px; }
+  .facts dt { color: var(--text-muted); flex: none; }
+  .facts dd { margin: 0; text-align: right; overflow-wrap: anywhere; min-width: 0; }
 
   .site-footer {
-    max-width: 1600px; margin: 6px auto 0; padding: 18px 24px 26px;
-    border-top: 1px solid var(--border); text-align: center;
-    font-size: 12px; color: var(--text-muted);
+    max-width: 1600px; margin: 0 auto; padding: 18px 28px 28px;
+    font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between; gap: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  @media (max-width: 640px) {
+    .header-inner { padding: 10px 16px; }
+    main { padding: 18px 16px 40px; gap: 26px; }
+    .site-footer { padding: 16px; }
+    .live { border-left: 0; padding-left: 0; margin-left: 0; }
+    .cards { grid-template-columns: minmax(0, 1fr); }
+    .detailed .cards { grid-template-columns: minmax(0, 1fr); }
+    .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   }
 </style>
 </head>
 <body>
 <header>
-  <div class="brand">
-    <span class="logo" id="logo"></span>
-    <div>
-      <h1>k3s cluster</h1>
-      <div class="tagline">Homelab fleet monitor</div>
+  <div class="header-inner">
+    <div class="brand">
+      <span class="logo" id="logo"></span>
+      <div>
+        <h1>k3s cluster</h1>
+        <div class="tagline">Homelab fleet monitor</div>
+      </div>
     </div>
-  </div>
-  <div class="live" id="live"><i class="dot"></i><span id="stamp">connecting…</span></div>
-  <span class="grow"></span>
-  <div class="toggle" role="group" aria-label="Theme">
-    <button type="button" id="theme-auto" aria-pressed="true">Auto</button>
-    <button type="button" id="theme-light" aria-pressed="false">Light</button>
-    <button type="button" id="theme-dark" aria-pressed="false">Dark</button>
-  </div>
-  <div class="toggle" role="group" aria-label="Card density">
-    <button type="button" id="density-compact" aria-pressed="true">Compact</button>
-    <button type="button" id="density-detailed" aria-pressed="false">Detailed</button>
+    <div class="live" id="live" role="status"><i class="dot"></i><span id="stamp">Connecting…</span></div>
+    <span class="grow"></span>
+    <div class="controls">
+      <div class="toggle" role="group" aria-label="Theme">
+        <button type="button" id="theme-auto" aria-pressed="true">Auto</button>
+        <button type="button" id="theme-light" aria-pressed="false">Light</button>
+        <button type="button" id="theme-dark" aria-pressed="false">Dark</button>
+      </div>
+      <div class="toggle" role="group" aria-label="Card density">
+        <button type="button" id="density-compact" aria-pressed="true">Compact</button>
+        <button type="button" id="density-detailed" aria-pressed="false">Detailed</button>
+      </div>
+    </div>
   </div>
 </header>
 <main id="main">
-  <div class="banner" id="degraded"></div>
-  <section>
-    <h3>Overview</h3>
-    <div class="kpis" id="kpis"></div>
+  <div class="banner" id="degraded" role="alert"></div>
+  <section aria-labelledby="overview-heading">
+    <div class="section-head"><h2 id="overview-heading">Overview</h2></div>
+    <div class="panel"><div class="kpis" id="kpis"></div></div>
   </section>
-  <section>
-    <h3 id="devices-heading">Devices</h3>
+  <section aria-labelledby="devices-heading">
+    <div class="section-head">
+      <h2 id="devices-heading">Devices</h2><span class="count" id="devices-count"></span>
+      <span class="hint">Click a device for details</span>
+    </div>
     <div class="cards" id="nodes"></div>
   </section>
-  <section>
-    <h3 id="namespaces-heading">Namespaces</h3>
-    <div class="card"><ul class="drill-list" id="namespaces"></ul></div>
-  </section>
-  <section>
-    <h3 id="workloads-heading">Workloads</h3>
-    <div class="card"><ul class="drill-list" id="workloads"></ul></div>
-  </section>
-  <section>
-    <h3 id="events-heading">Warnings, last hour</h3>
-    <ul class="events" id="events"></ul>
+  <div class="split">
+    <section aria-labelledby="workloads-heading">
+      <div class="section-head"><h2 id="workloads-heading">Workloads</h2><span class="count" id="workloads-count"></span></div>
+      <div class="panel">
+        <table class="data">
+          <thead><tr>
+            <th>Name</th><th class="hide-sm">Namespace</th><th class="hide-sm">Kind</th>
+            <th class="num">Ready</th><th class="num hide-sm">Restarts</th><th class="end">Status</th>
+          </tr></thead>
+          <tbody id="workloads"></tbody>
+        </table>
+      </div>
+    </section>
+    <section aria-labelledby="namespaces-heading">
+      <div class="section-head"><h2 id="namespaces-heading">Namespaces</h2><span class="count" id="namespaces-count"></span></div>
+      <div class="panel">
+        <table class="data">
+          <thead><tr>
+            <th>Name</th><th class="num">Pods</th><th class="num hide-sm">Healthy</th><th class="end">Status</th>
+          </tr></thead>
+          <tbody id="namespaces"></tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+  <section aria-labelledby="events-heading">
+    <div class="section-head"><h2 id="events-heading">Warnings</h2><span class="count" id="events-count"></span><span class="hint">Last hour</span></div>
+    <div class="panel"><ul class="events" id="events"></ul></div>
   </section>
 </main>
-<footer class="site-footer">Built by Wael</footer>
-<dialog class="device-modal" id="device-modal">
+<footer class="site-footer"><span>Built by Wael</span><span>Refreshes every 5s</span></footer>
+<dialog class="device-modal" id="device-modal" aria-labelledby="modal-title">
   <div class="modal-head">
-    <h3 id="modal-title"></h3>
-    <button type="button" class="modal-close" id="modal-close" aria-label="Close">&times;</button>
+    <div><h2 id="modal-title"></h2><div class="modal-sub" id="modal-sub"></div></div>
+    <button type="button" class="modal-close" id="modal-close" aria-label="Close"></button>
   </div>
   <div class="modal-body" id="modal-body"></div>
 </dialog>
-<dialog class="device-modal" id="namespace-modal">
+<dialog class="device-modal" id="namespace-modal" aria-labelledby="namespace-modal-title">
   <div class="modal-head">
-    <h3 id="namespace-modal-title"></h3>
-    <button type="button" class="modal-close" id="namespace-modal-close" aria-label="Close">&times;</button>
+    <div><h2 id="namespace-modal-title"></h2><div class="modal-sub" id="namespace-modal-sub"></div></div>
+    <button type="button" class="modal-close" id="namespace-modal-close" aria-label="Close"></button>
   </div>
   <div class="modal-body" id="namespace-modal-body"></div>
 </dialog>
@@ -485,14 +665,22 @@ function sparkline(values, label, unit, opts) {
   const x = i => pad + (i / Math.max(values.length - 1, 1)) * (w - 2 * pad);
   const y = v => h - pad - ((v - lo) / (hi - lo)) * (h - 2 * pad);
 
+  // Each unbroken run gets a faint area under it, which gives the trend
+  // some weight without competing with the line, then the line itself.
   let run = [];
   const flush = () => {
     if (run.length >= 2) {
+      const first = run[0].split(",")[0], last = run[run.length - 1].split(",")[0];
+      const area = document.createElementNS(SVGNS, "path");
+      area.setAttribute("d", "M" + run.join(" L") + " L" + last + "," + (h - pad) + " L" + first + "," + (h - pad) + " Z");
+      area.setAttribute("fill", "var(--accent-fill)");
+      svg.appendChild(area);
       const path = document.createElementNS(SVGNS, "path");
       path.setAttribute("d", "M" + run.join(" L"));
       path.setAttribute("fill", "none");
-      path.setAttribute("stroke", "var(--accent-soft)");
-      path.setAttribute("stroke-width", "2");
+      path.setAttribute("stroke", "var(--accent)");
+      path.setAttribute("stroke-opacity", "0.75");
+      path.setAttribute("stroke-width", "1.5");
       path.setAttribute("stroke-linejoin", "round");
       path.setAttribute("stroke-linecap", "round");
       svg.appendChild(path);
@@ -513,7 +701,7 @@ function sparkline(values, label, unit, opts) {
     const dot = document.createElementNS(SVGNS, "circle");
     dot.setAttribute("cx", x(lastIdx).toFixed(1));
     dot.setAttribute("cy", y(values[lastIdx]).toFixed(1));
-    dot.setAttribute("r", "3");
+    dot.setAttribute("r", "2.75");
     dot.setAttribute("fill", "var(--accent)");
     dot.setAttribute("stroke", "var(--surface-1)");
     dot.setAttribute("stroke-width", "2");
@@ -567,6 +755,10 @@ const ICONS = {
   power:     "M11 2L4 12h5l-1.5 7L17 8h-5.5z",
   workloads: "M3 3h5v5h-5zM12 3h5v5h-5zM3 12h5v5h-5zM12 12h5v5h-5z",
   warning:   "M10 2.3L18.3 17h-16.6zM10 7.3v4.7M10 14.7h.01",
+  alert:     "M10 2.8L18 16.6H2zM10 7.6v4M10 14.2v.01",
+  check:     "M4.5 10.5l3.5 3.5 7.5-8",
+  chevron:   "M7.5 4.5l5.5 5.5-5.5 5.5",
+  close:     "M5 5l10 10M15 5L5 15",
 };
 
 // icon() builds a small badge glyph from one of the ICONS paths, with an
@@ -575,15 +767,16 @@ const ICONS = {
 function icon(name, opts) {
   opts = opts || {};
   const svg = document.createElementNS(SVGNS, "svg");
-  svg.setAttribute("width", "16");
-  svg.setAttribute("height", "16");
+  const size = String(opts.size || 16);
+  svg.setAttribute("width", size);
+  svg.setAttribute("height", size);
   svg.setAttribute("viewBox", "0 0 20 20");
   svg.setAttribute("aria-hidden", "true");
   const path = document.createElementNS(SVGNS, "path");
   path.setAttribute("d", ICONS[name]);
   path.setAttribute("fill", opts.fill ? "currentColor" : "none");
   path.setAttribute("stroke", opts.fill ? "none" : "currentColor");
-  path.setAttribute("stroke-width", "1.3");
+  path.setAttribute("stroke-width", "1.5");
   path.setAttribute("stroke-linecap", "round");
   path.setAttribute("stroke-linejoin", "round");
   svg.appendChild(path);
@@ -594,7 +787,7 @@ function icon(name, opts) {
     c.setAttribute("r", opts.circle[2]);
     c.setAttribute("fill", "none");
     c.setAttribute("stroke", "currentColor");
-    c.setAttribute("stroke-width", "1.3");
+    c.setAttribute("stroke-width", "1.5");
     svg.appendChild(c);
   }
   return svg;
@@ -604,8 +797,8 @@ function icon(name, opts) {
 // reads as the product rather than as one more device glyph.
 function logoMark() {
   const svg = document.createElementNS(SVGNS, "svg");
-  svg.setAttribute("width", "22");
-  svg.setAttribute("height", "22");
+  svg.setAttribute("width", "20");
+  svg.setAttribute("height", "20");
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("aria-hidden", "true");
   const path = document.createElementNS(SVGNS, "path");
@@ -618,7 +811,9 @@ function logoMark() {
   for (const [cx, cy] of [[6, 18], [18, 18], [12, 7]]) {
     const c = document.createElementNS(SVGNS, "circle");
     c.setAttribute("cx", cx); c.setAttribute("cy", cy); c.setAttribute("r", "2.4");
-    c.setAttribute("fill", "var(--plane)");
+    // Filled with the logo chip's own background so each node reads as a
+    // ring sitting on top of the edges it joins.
+    c.setAttribute("fill", "var(--text-primary)");
     c.setAttribute("stroke", "currentColor");
     c.setAttribute("stroke-width", "1.6");
     svg.appendChild(c);
@@ -626,27 +821,20 @@ function logoMark() {
   return svg;
 }
 
-// A colour-coded icon chip. The colour identifies the metric category
-// (cpu/memory/disk/...) and is fixed regardless of theme or severity —
-// severity is still carried separately, by the .sev word next to the
-// value, never by recolouring the badge.
-function badge(name, cls, opts) {
-  const b = el("div", "badge " + cls);
-  b.appendChild(icon(name, opts));
-  return b;
-}
-
-function kpiCard(cls, iconName, iconOpts, label, valueText, opts) {
+// One cell of the overview strip: a muted icon and label, the value, an
+// optional severity word, then a trend or a note. The icon is neutral —
+// on this page colour is reserved for status.
+function kpiCard(iconName, iconOpts, label, valueText, opts) {
   opts = opts || {};
-  const card = el("div", "kpi" + (opts.wide ? " wide" : "") + (opts.severity ? " sev-" + opts.severity : ""));
+  const card = el("div", "kpi" + (opts.severity ? " sev-" + opts.severity : ""));
   const top = el("div", "kpi-top");
-  top.appendChild(badge(iconName, cls, iconOpts));
+  top.appendChild(icon(iconName, Object.assign({ size: 15 }, iconOpts)));
   top.appendChild(el("span", "kpi-label", label));
   card.appendChild(top);
   const readout = el("div", "kpi-readout");
   if (opts.valueNode) readout.appendChild(opts.valueNode);
   else readout.appendChild(el("span", "kpi-value", valueText));
-  if (opts.severity) readout.appendChild(el("span", "sev " + opts.severity, opts.word || opts.severity));
+  if (opts.severity && !opts.wordInValue) readout.appendChild(el("span", "sev " + opts.severity, opts.word || opts.severity));
   card.appendChild(readout);
   if (opts.viz) {
     const viz = el("div", "kpi-viz");
@@ -727,8 +915,10 @@ function fmtKV(m) {
 function drillQuotaRow(q) {
   const sev = level(q.percent, 80, 95);
   const pillText = has(q.percent) ? q.percent.toFixed(0) + "%" : "—";
-  return drillRow(q.resource, fmtQuotaValue(q.resource, q.used) + " / " + fmtQuotaValue(q.resource, q.hard),
-    sev === "critical" ? "critical" : "plain", pillText);
+  const li = drillRow(q.resource, fmtQuotaValue(q.resource, q.used) + " / " + fmtQuotaValue(q.resource, q.hard),
+    sev || "plain", pillText);
+  if (has(q.percent)) li.querySelector(".main").appendChild(meter(q.percent, sev));
+  return li;
 }
 
 function drillLimitRangeRow(item) {
@@ -753,44 +943,86 @@ function drillServiceRow(s) {
   return drillRow(s.name, bits.join(" · "), "plain", s.type);
 }
 
-// A namespace row is itself a click target for its own drill-down modal,
-// the same affordance a device card uses for its pods/workloads pop-out.
-function drillNamespaceRow(ns) {
-  const bits = [ns.phase, ns.podCount + (ns.podCount === 1 ? " pod" : " pods")];
-  if (ns.workloadCount) {
-    bits.push((ns.workloadCount - ns.unhealthyWorkloads) + "/" + ns.workloadCount + " workloads healthy");
-  }
+// One table cell, optionally with a class — the tables are built the same
+// way as every other element on the page, through textContent only.
+function td(cls, text) { return el("td", cls, text); }
+
+function statusCell(healthy, okText, badText) {
+  const c = td("end");
+  c.appendChild(el("span", "pill " + (healthy ? "good" : "critical"), healthy ? okText : badText));
+  return c;
+}
+
+// The fleet-wide workload table: one row per workload regardless of which
+// device it landed on. Ready reads as a fraction so a 3/4 DaemonSet is
+// obviously one pod short, not just "degraded".
+function workloadRow(w) {
+  const tr = el("tr");
+  tr.appendChild(td("name", w.name));
+  tr.appendChild(td("sub hide-sm", w.namespace));
+  tr.appendChild(td("dim hide-sm", w.kind));
+  tr.appendChild(td("num", w.ready + "/" + w.desired));
+  tr.appendChild(td("num hide-sm" + (w.restarts ? "" : " dim"), String(w.restarts)));
+  tr.appendChild(statusCell(w.healthy, "ok", "degraded"));
+  return tr;
+}
+
+// A namespace row drills into its own modal. The name is a real <button>
+// so keyboard and screen-reader users get a proper control; the row is the
+// bigger mouse target and catches the button's click as it bubbles.
+function namespaceRow(ns) {
+  const tr = el("tr", "drill");
+  const name = td("name");
+  const btn = el("button", "row-link", ns.name);
+  btn.type = "button";
+  btn.setAttribute("aria-haspopup", "dialog");
+  name.appendChild(btn);
+  tr.appendChild(name);
+  tr.appendChild(td("num", String(ns.podCount)));
+  tr.appendChild(td("num hide-sm" + (ns.workloadCount ? "" : " dim"),
+    ns.workloadCount ? (ns.workloadCount - ns.unhealthyWorkloads) + "/" + ns.workloadCount : "—"));
   const healthy = ns.unhealthyWorkloads === 0;
-  const li = drillRow(ns.name, bits.join(" · "), healthy ? "good" : "critical", healthy ? "ok" : "degraded");
-  li.setAttribute("role", "button");
-  li.tabIndex = 0;
-  li.setAttribute("aria-haspopup", "dialog");
-  li.addEventListener("click", () => openNamespaceModal(ns));
-  li.addEventListener("keydown", e => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openNamespaceModal(ns); }
-  });
-  return li;
+  const status = statusCell(healthy, "ok", "degraded");
+  const chev = el("span", "chev");
+  chev.appendChild(icon("chevron", { size: 14 }));
+  status.appendChild(chev);
+  tr.appendChild(status);
+  tr.addEventListener("click", () => openNamespaceModal(ns));
+  return tr;
+}
+
+// A modal section heading with its item count in the same chip style the
+// page's own section headings use.
+function modalHeading(text, n) {
+  const h = el("h4", null, text);
+  if (has(n)) h.appendChild(el("span", "count", String(n)));
+  return h;
 }
 
 function openNamespaceModal(ns) {
   document.getElementById("namespace-modal-title").textContent = ns.name;
+  const sub = [ns.phase, ns.podCount + (ns.podCount === 1 ? " pod" : " pods")];
+  if (ns.workloadCount) sub.push((ns.workloadCount - ns.unhealthyWorkloads) + "/" + ns.workloadCount + " workloads healthy");
+  const created = fmtSince(ns.createdAt).replace(/^joined/, "created");
+  if (created) sub.push(created);
+  document.getElementById("namespace-modal-sub").textContent = sub.join(" · ");
   const body = document.getElementById("namespace-modal-body");
   body.replaceChildren();
 
   if (ns.quota.length) {
-    body.appendChild(el("h4", null, "Quota"));
+    body.appendChild(modalHeading("Quota"));
     const ql = el("ul", "drill-list");
     ql.replaceChildren(...ns.quota.map(drillQuotaRow));
     body.appendChild(ql);
   }
   if (ns.limitRanges.length) {
-    body.appendChild(el("h4", null, "Limit ranges"));
+    body.appendChild(modalHeading("Limit ranges"));
     const ll = el("ul", "drill-list");
     ll.replaceChildren(...ns.limitRanges.map(drillLimitRangeRow));
     body.appendChild(ll);
   }
 
-  body.appendChild(el("h4", null, "PVCs (" + ns.pvcs.length + ")"));
+  body.appendChild(modalHeading("PVCs", ns.pvcs.length));
   if (ns.pvcs.length) {
     const pl = el("ul", "drill-list");
     pl.replaceChildren(...ns.pvcs.map(drillPVCRow));
@@ -799,7 +1031,7 @@ function openNamespaceModal(ns) {
     body.appendChild(el("div", "empty", "No PVCs in this namespace."));
   }
 
-  body.appendChild(el("h4", null, "Services (" + ns.services.length + ")"));
+  body.appendChild(modalHeading("Services", ns.services.length));
   if (ns.services.length) {
     const sl = el("ul", "drill-list");
     sl.replaceChildren(...ns.services.map(drillServiceRow));
@@ -834,6 +1066,15 @@ const GLYPHS = {
   unknown:      "M2.5 3.5h11v9h-11z",
 };
 
+// The words a person would use for each chassis class. The class keys are
+// the agent's own vocabulary; these are only how they read on the page.
+const CLASS_LABELS = {
+  laptop: "Laptop", desktop: "Desktop", "mini-pc": "Mini PC", "all-in-one": "All-in-one",
+  server: "Server", sbc: "Single-board computer", embedded: "Embedded board",
+  tablet: "Tablet", "stick-pc": "Stick PC", vm: "Virtual machine",
+};
+function classLabel(cls) { return cls ? CLASS_LABELS[cls] || cls : ""; }
+
 function glyph(cls) {
   const svg = document.createElementNS(SVGNS, "svg");
   svg.setAttribute("width", "16");
@@ -856,22 +1097,34 @@ function glyph(cls) {
 // a row of em dashes tells you less than a shorter line does.
 function deviceLine(n) {
   const row = el("div", "device");
-  const b = el("div", "badge identity");
+  const b = el("div", "badge");
   b.appendChild(glyph(n.deviceClass));
   row.appendChild(b);
+  const who = el("div", "who");
+  row.appendChild(who);
 
-  const model = [n.deviceVendor, n.deviceModel].filter(Boolean).join(" ");
+  const model = deviceModel(n);
   if (!model && !n.deviceClass) {
     row.classList.add("unknown");
-    row.appendChild(el("span", null, "unidentified device"));
-    row.title = "No usable DMI on this node. Name it with:\n" +
-      "kubectl annotate node " + n.name + " k3s-dash/model=\"…\" k3s-dash/type=laptop";
+    who.appendChild(el("span", null, "unidentified device"));
+    row.title = annotateHint(n);
     return row;
   }
-  if (n.deviceClass) row.appendChild(el("span", "class", n.deviceClass));
-  if (n.deviceClass && model) row.appendChild(el("span", null, "·"));
-  if (model) row.appendChild(el("span", "model", model));
+  // The model leads because it is the more specific answer; the chassis
+  // class sits under it as a category. A class with no model is promoted
+  // to the main line rather than leaving it empty.
+  who.appendChild(el("span", "model", model || classLabel(n.deviceClass)));
+  if (model && n.deviceClass) who.appendChild(el("span", "class", classLabel(n.deviceClass)));
   return row;
+}
+
+function deviceModel(n) {
+  return [n.deviceVendor, n.deviceModel].filter(Boolean).join(" ");
+}
+
+function annotateHint(n) {
+  return "No usable DMI on this node. Name it with:\n" +
+    "kubectl annotate node " + n.name + " k3s-dash/model=\"…\" k3s-dash/type=laptop";
 }
 
 // What the node *is*, as opposed to what it is doing. These values do not
@@ -891,11 +1144,12 @@ function specLines(n) {
   if (n.internalIP) ops.push(n.internalIP);
   ops.push(n.podCount + (n.podCount === 1 ? " pod" : " pods"));
   if (has(n.uptimeSeconds)) ops.push("up " + fmtUptime(n.uptimeSeconds));
-  const since = fmtSince(n.joinedAt);
-  if (since) ops.push(since);
 
-  const platform = [n.osImage, n.kernelVersion, n.architecture, n.kubeletVersion].filter(Boolean);
-  return [hardware, ops, platform].filter(parts => parts.length).map(parts => parts.join(" · "));
+  // The platform strings (OS, kernel, arch, kubelet) and join date live in
+  // the device's pop-out instead — on the card they were two more grey
+  // lines between the name and the numbers, for facts that rarely matter
+  // at a glance.
+  return [hardware, ops].filter(parts => parts.length).map(parts => parts.join(" · "));
 }
 
 // The worst severity across a node's own metrics, used to accent the
@@ -926,14 +1180,20 @@ function nodeCard(n, s) {
   const sev = cardSeverity(n);
   const card = el("div", "card" + (sev ? " sev-" + sev : ""));
 
-  const title = el("h2");
+  const head = el("div", "card-head");
+  const titleWrap = el("div", "card-title");
+  const title = el("h3");
   title.appendChild(el("span", null, n.displayName || n.name));
   // The Kubernetes node name is what kubectl answers to, so a friendly name
   // never replaces it — it only leads.
   if (n.displayName) title.appendChild(el("span", "alias", n.name));
-  title.appendChild(el("span", "pill " + (n.ready ? "good" : "critical"), n.ready ? "Ready" : "NotReady"));
-  if (n.controlPlane) title.appendChild(el("span", "pill plain", "control-plane"));
-  card.appendChild(title);
+  titleWrap.appendChild(title);
+  head.appendChild(titleWrap);
+  const pills = el("div", "card-pills");
+  if (n.controlPlane) pills.appendChild(el("span", "pill plain", "control-plane"));
+  pills.appendChild(el("span", "pill " + (n.ready ? "good" : "critical"), n.ready ? "Ready" : "NotReady"));
+  head.appendChild(pills);
+  card.appendChild(head);
 
   card.appendChild(deviceLine(n));
   for (const line of specLines(n)) card.appendChild(el("div", "spec", line));
@@ -980,19 +1240,19 @@ function nodeCard(n, s) {
 
   card.appendChild(stats);
 
-  // The whole card is the click target for its workloads/pods pop-out —
-  // no button, no visible hint row, just the card itself.
-  if (n.podCount > 0) {
-    card.classList.add("clickable");
-    card.setAttribute("role", "button");
-    card.setAttribute("tabindex", "0");
-    card.setAttribute("aria-haspopup", "dialog");
-    card.setAttribute("aria-label", "View workloads and pods on " + (n.displayName || n.name));
-    card.addEventListener("click", () => openDeviceModal(n, s));
-    card.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDeviceModal(n, s); }
-    });
-  }
+  // The whole card is the click target for its pop-out — no button, no
+  // hint row, just the card. Every card gets one now, even with no pods,
+  // because the pop-out also carries the platform details the card leaves
+  // out.
+  card.classList.add("clickable");
+  card.setAttribute("role", "button");
+  card.setAttribute("tabindex", "0");
+  card.setAttribute("aria-haspopup", "dialog");
+  card.setAttribute("aria-label", "View details, workloads and pods for " + (n.displayName || n.name));
+  card.addEventListener("click", () => openDeviceModal(n, s));
+  card.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openDeviceModal(n, s); }
+  });
 
   return card;
 }
@@ -1008,20 +1268,72 @@ function openDeviceModal(n, s) {
   const deviceWorkloads = s.workloads.filter(w => ownerKeys.has(w.namespace + "/" + w.name));
 
   document.getElementById("modal-title").textContent = n.displayName || n.name;
+  const sub = [];
+  if (n.displayName) sub.push(n.name);
+  sub.push(n.ready ? "Ready" : "NotReady");
+  if (n.controlPlane) sub.push("control-plane");
+  document.getElementById("modal-sub").textContent = sub.join(" · ");
+
   const body = document.getElementById("modal-body");
   body.replaceChildren();
+
+  body.appendChild(modalHeading("Details"));
+  body.appendChild(deviceFacts(n));
+
   if (deviceWorkloads.length) {
-    body.appendChild(el("h4", null, "Workloads (" + deviceWorkloads.length + ")"));
+    body.appendChild(modalHeading("Workloads", deviceWorkloads.length));
     const wl = el("ul", "drill-list");
     wl.replaceChildren(...deviceWorkloads.map(drillWorkloadRow));
     body.appendChild(wl);
   }
-  body.appendChild(el("h4", null, "Pods (" + devicePods.length + ")"));
-  const pl = el("ul", "drill-list");
-  pl.replaceChildren(...devicePods.map(drillPodRow));
-  body.appendChild(pl);
+  body.appendChild(modalHeading("Pods", devicePods.length));
+  if (devicePods.length) {
+    const pl = el("ul", "drill-list");
+    pl.replaceChildren(...devicePods.map(drillPodRow));
+    body.appendChild(pl);
+  } else {
+    body.appendChild(el("div", "empty", "No pods scheduled on this device."));
+  }
 
   document.getElementById("device-modal").showModal();
+}
+
+// The device's spec sheet: everything that describes the box rather than
+// what it is doing. Unknown facts are left out, not dashed, for the same
+// reason the identity line drops them.
+function deviceFacts(n) {
+  const facts = [
+    ["Model", deviceModel(n)],
+    ["Type", classLabel(n.deviceClass)],
+    ["CPU", n.cpuModel],
+    ["Cores", n.cpuCores ? n.cpuCores + (n.cpuCores === 1 ? " core" : " cores") : ""],
+    ["Memory", n.memTotalBytes ? fmtBytes(n.memTotalBytes) + " RAM" : ""],
+    ["Disk", n.diskTotalBytes ? fmtBytes(n.diskTotalBytes) + " disk" : ""],
+    ["Internal IP", n.internalIP],
+    ["Uptime", has(n.uptimeSeconds) ? fmtUptime(n.uptimeSeconds) : ""],
+    ["Joined", fmtSince(n.joinedAt).replace(/^joined /, "")],
+    ["OS", n.osImage],
+    ["Kernel", n.kernelVersion],
+    ["Architecture", n.architecture],
+    ["Kubelet", n.kubeletVersion],
+  ];
+  const dl = el("dl", "facts");
+  for (const [k, v] of facts) {
+    if (!v) continue;
+    const row = el("div");
+    row.appendChild(el("dt", null, k));
+    row.appendChild(el("dd", k === "Internal IP" || k === "Kernel" || k === "Kubelet" ? "mono" : null, v));
+    dl.appendChild(row);
+  }
+  if (!deviceModel(n) && !n.deviceClass) {
+    const row = el("div");
+    row.appendChild(el("dt", null, "Model"));
+    const dd = el("dd", null, "unidentified device");
+    dd.title = annotateHint(n);
+    row.appendChild(dd);
+    dl.prepend(row);
+  }
+  return dl;
 }
 
 // Clicking the dialog's own backdrop area lands a click on the <dialog>
@@ -1053,46 +1365,48 @@ function fleetKPIs(fleet) {
 
   const cards = [];
 
-  cards.push(kpiCard("devices", "devices", {}, "Devices ready", null, {
-    wide: true, valueNode: readyValue, severity: readySev, word: "not ready",
+  cards.push(kpiCard("devices", {}, "Devices ready", null, {
+    valueNode: readyValue, severity: readySev, word: "not ready",
     note: down === 0
-      ? (fleet.devices === 1 ? "device ready" : "devices ready")
+      ? (fleet.devices === 1 ? "Ready" : "All ready")
       : down + (down === 1 ? " device is not ready" : " devices are not ready"),
   }));
 
   const cpuSev = level(fleet.cpuPercent, ...THRESHOLDS.cpu);
-  cards.push(kpiCard("cpu", "cpu", {}, "CPU", fmtPct(fleet.cpuPercent), {
+  cards.push(kpiCard("cpu", {}, "CPU", fmtPct(fleet.cpuPercent), {
     severity: cpuSev, word: cpuSev === "critical" ? "saturated" : "busy",
-    viz: sparkline(series.cpuPercent, "Cluster CPU", "%", { min: 0, max: 100 }),
+    viz: sparkline(series.cpuPercent, "Cluster CPU", "%", { min: 0, max: 100, width: 150 }),
     note: fleet.cpuCores ? fleet.cpuCores + " cores total" : "",
   }));
 
   const memSev = level(fleet.memPercent, ...THRESHOLDS.mem);
-  cards.push(kpiCard("memory", "memory", {}, "Memory", fmtPct(fleet.memPercent), {
+  cards.push(kpiCard("memory", {}, "Memory", fmtPct(fleet.memPercent), {
     severity: memSev, word: memSev === "critical" ? "near limit" : "high",
-    viz: sparkline(series.memPercent, "Cluster memory", "%", { min: 0, max: 100 }),
+    viz: sparkline(series.memPercent, "Cluster memory", "%", { min: 0, max: 100, width: 150 }),
     note: fleet.memTotalBytes ? fmtBytes(fleet.memTotalBytes) + " total" : "",
   }));
 
   const diskSev = level(fleet.diskPercent, ...THRESHOLDS.disk);
-  cards.push(kpiCard("disk", "disk", {}, "Disk", fmtPct(fleet.diskPercent), {
+  cards.push(kpiCard("disk", {}, "Disk", fmtPct(fleet.diskPercent), {
     severity: diskSev, word: diskSev === "critical" ? "almost full" : "filling",
-    viz: sparkline(series.diskPercent, "Cluster disk", "%", { min: 0, max: 100 }),
+    viz: sparkline(series.diskPercent, "Cluster disk", "%", { min: 0, max: 100, width: 150 }),
   }));
 
   const tempSev = level(fleet.hottestC, ...THRESHOLDS.temp);
-  cards.push(kpiCard("temp", "temp", { circle: [10, 13, 3] }, "Hottest", fmtTemp(fleet.hottestC), {
+  cards.push(kpiCard("temp", { circle: [10, 13, 3] }, "Hottest", fmtTemp(fleet.hottestC), {
     severity: tempSev, word: tempSev === "critical" ? "overheating" : "hot",
-    viz: sparkline(series.tempC, "Hottest device", "°C"),
+    viz: sparkline(series.tempC, "Hottest device", "°C", { width: 150 }),
     note: fleet.hottestNode || "",
   }));
 
-  cards.push(kpiCard("power", "power", { fill: true }, "Power", fleet.onBattery ? fleet.onBattery + " unplugged" : "all on AC", {
-    severity: fleet.onBattery ? "warning" : "", word: "on battery",
+  cards.push(kpiCard("power", { fill: true }, "Power", fleet.onBattery ? fleet.onBattery + " unplugged" : "all on AC", {
+    // "unplugged" in the value already is the severity word, so a second
+    // chip saying "on battery" would only repeat it (and wrap the cell).
+    severity: fleet.onBattery ? "warning" : "", word: "on battery", wordInValue: true,
     note: fleet.onBattery ? (fleet.devices - fleet.onBattery) + " on AC" : "",
   }));
 
-  cards.push(kpiCard("work", "workloads", {}, "Workloads", fleet.workloadsDegraded
+  cards.push(kpiCard("workloads", {}, "Workloads", fleet.workloadsDegraded
     ? fleet.workloadsDegraded + " of " + fleet.workloadsTotal
     : "all healthy", {
     severity: fleet.workloadsDegraded ? "critical" : "", word: "degraded",
@@ -1103,19 +1417,42 @@ function fleetKPIs(fleet) {
   return cards;
 }
 
+// "4m ago" for an event — coarser than a pod's age on purpose, since the
+// warnings panel only ever covers the last hour.
+function fmtAgo(iso) {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (isNaN(s) || String(iso).startsWith("0001")) return "";
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.floor(s / 60) + "m ago";
+  return Math.floor(s / 3600) + "h ago";
+}
+
 function alertCard(e) {
   const li = el("li", "alert");
   const iconWrap = el("div", "alert-icon");
-  iconWrap.appendChild(icon("warning", { fill: true }));
+  iconWrap.appendChild(icon("alert"));
   li.appendChild(iconWrap);
   const body = el("div", "alert-body");
   const head = el("div", "alert-head");
   head.appendChild(el("strong", null, e.reason));
-  head.appendChild(el("span", "muted", e.namespace + "/" + e.object + (e.count > 1 ? " ×" + e.count : "")));
+  head.appendChild(el("span", "obj", e.namespace + "/" + e.object));
+  if (e.count > 1) head.appendChild(el("span", "count", "×" + e.count));
+  const when = fmtAgo(e.at);
+  if (when) head.appendChild(el("span", "when", when));
   body.appendChild(head);
   body.appendChild(el("div", "msg", e.message));
   li.appendChild(body);
   return li;
+}
+
+// An empty table still needs one full-width row, or the header floats
+// over nothing and reads as a rendering bug.
+function emptyRow(cols, text) {
+  const tr = el("tr");
+  const c = td("empty", text);
+  c.colSpan = cols;
+  tr.appendChild(c);
+  return tr;
 }
 
 function render(s) {
@@ -1124,35 +1461,33 @@ function render(s) {
 
   const nodes = sortedNodes(s.nodes);
   document.getElementById("nodes").replaceChildren(...nodes.map(n => nodeCard(n, s)));
-  document.getElementById("devices-heading").textContent =
-    nodes.length === 1 ? "Device" : nodes.length + " devices";
+  document.getElementById("devices-count").textContent = String(nodes.length);
 
-  document.getElementById("namespaces-heading").textContent =
-    s.namespaces.length === 1 ? "1 namespace" : s.namespaces.length + " namespaces";
+  document.getElementById("namespaces-count").textContent = String(s.namespaces.length);
   const namespacesList = document.getElementById("namespaces");
   if (s.namespaces.length) {
-    namespacesList.replaceChildren(...s.namespaces.map(drillNamespaceRow));
+    namespacesList.replaceChildren(...s.namespaces.map(namespaceRow));
   } else {
-    namespacesList.replaceChildren(el("li", "empty", "No namespaces reported."));
+    namespacesList.replaceChildren(emptyRow(4, "No namespaces reported."));
   }
 
-  document.getElementById("workloads-heading").textContent =
-    s.workloads.length === 1 ? "1 workload" : s.workloads.length + " workloads";
+  document.getElementById("workloads-count").textContent = String(s.workloads.length);
   const workloadsList = document.getElementById("workloads");
   if (s.workloads.length) {
-    workloadsList.replaceChildren(...s.workloads.map(drillWorkloadRow));
+    workloadsList.replaceChildren(...s.workloads.map(workloadRow));
   } else {
-    workloadsList.replaceChildren(el("li", "empty", "No workloads reported."));
+    workloadsList.replaceChildren(emptyRow(6, "No workloads reported."));
   }
 
-  document.getElementById("events-heading").textContent =
-    "Warnings, last hour" + (s.events.length ? " (" + s.events.length + ")" : "");
-
+  document.getElementById("events-count").textContent = s.events.length ? String(s.events.length) : "";
   const events = document.getElementById("events");
   if (s.events.length) {
     events.replaceChildren(...s.events.map(alertCard));
   } else {
-    events.replaceChildren(el("li", "empty", "No warnings in the last hour."));
+    const empty = el("li", "empty ok");
+    empty.appendChild(icon("check"));
+    empty.appendChild(el("span", null, "No warnings in the last hour."));
+    events.replaceChildren(empty);
   }
 
   const banner = document.getElementById("degraded");
@@ -1165,8 +1500,8 @@ function render(s) {
   const age = Math.round((Date.now() - sampled.getTime()) / 1000);
   const first = isNaN(age) || String(s.meta.sampledAt).startsWith("0001");
   document.getElementById("stamp").textContent = first
-    ? "waiting for the first sample…"
-    : "updated " + (age < 60 ? age + "s" : Math.round(age / 60) + "m") + " ago";
+    ? "Waiting for the first sample…"
+    : "Updated " + (age < 60 ? age + "s" : Math.round(age / 60) + "m") + " ago";
 
   // A snapshot older than four intervals means the sample loop is stuck or
   // the API server is unreachable. What is on screen is then history, not
@@ -1181,7 +1516,7 @@ function render(s) {
   }
 
   if (notes.length) {
-    banner.textContent = notes.join(" ");
+    banner.replaceChildren(icon("alert"), el("span", null, notes.join(" ")));
     banner.classList.add("on");
   } else {
     banner.classList.remove("on");
@@ -1246,12 +1581,15 @@ async function tick() {
   } catch (err) {
     // Hold the previous render rather than blanking the page.
     main.classList.add("stale");
-    document.getElementById("stamp").textContent = "dashboard unreachable — retrying";
+    document.getElementById("stamp").textContent = "Dashboard unreachable, retrying…";
     document.getElementById("live").classList.add("stale");
   }
 }
 
 document.getElementById("logo").appendChild(logoMark());
+for (const id of ["modal-close", "namespace-modal-close"]) {
+  document.getElementById(id).appendChild(icon("close", { size: 18 }));
+}
 initDensity();
 initTheme();
 initDeviceModal();
