@@ -17,7 +17,7 @@ import {
   SHELVES_PER_RACK, RACK_SPACING,
 } from "./room3d-logic.js";
 
-const SHELF_GAP = 2.0;        // vertical distance between shelves
+const SHELF_GAP = 1.75;       // vertical distance between shelves
 const SHELF_BASE = 0.5;       // height of the lowest shelf top
 const MAX_PODS_SHOWN = 24;    // per node; the label says how many more
 const SWITCH_POS = new THREE.Vector3(0, 0.6, -4.2);
@@ -25,7 +25,7 @@ const SWITCH_POS = new THREE.Vector3(0, 0.6, -4.2);
 const COLORS = {
   ok: new THREE.Color(0x0b1622),
   warn: new THREE.Color(0x2a1d08),
-  bad: new THREE.Color(0x2e0a0c),
+  bad: new THREE.Color(0x2a0f12),
 };
 const BAR_GOOD = new THREE.Color(0x22c55e).multiplyScalar(1.6);
 const BAR_WARN = new THREE.Color(0xf59e0b).multiplyScalar(1.6);
@@ -34,7 +34,7 @@ const BAR_OFF = new THREE.Color(0x121c27);
 const BAR_NODATA = new THREE.Color(0x3a4350);
 
 // Shared, never disposed per node.
-const podGeo = new THREE.BoxGeometry(0.12, 0.12, 0.12);
+const podGeo = new THREE.SphereGeometry(0.055, 12, 10);
 const podOk = new THREE.MeshStandardMaterial({ color: 0x16a34a, emissive: 0x16a34a, emissiveIntensity: 0.9, roughness: 0.4 });
 const podBad = new THREE.MeshStandardMaterial({ color: 0xdc2626, emissive: 0xef4444, emissiveIntensity: 1.2, roughness: 0.4 });
 for (const o of [podGeo, podOk, podBad]) o.userData.shared = true;
@@ -176,7 +176,7 @@ function buildLaptop() {
       if (dead || ind.cpu == null) screenMat.color.setRGB(0.02, 0.025, 0.03);
       else {
         const flick = motion ? 0.06 * Math.sin(t * 6 + ind.cpu * 9) : 0;
-        screenMat.color.setRGB(0.1 + ind.cpu * 0.5 + flick, 0.5 - ind.cpu * 0.25, 0.8 - ind.cpu * 0.4);
+        screenMat.color.setRGB(0.05 + ind.cpu * 0.3 + flick, 0.3 - ind.cpu * 0.15, 0.5 - ind.cpu * 0.25);
       }
       const k = dead || ind.battery == null ? "x" : ind.battery.toFixed(2);
       if (k !== ringKey) {
@@ -398,6 +398,7 @@ export function mount(container, opts = {}) {
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
   const canvas = renderer.domElement;
   canvas.style.display = "block";
   canvas.style.width = "100%";
@@ -415,7 +416,7 @@ export function mount(container, opts = {}) {
 
   const scene = new THREE.Scene();
   scene.background = COLORS.ok.clone();
-  scene.fog = new THREE.FogExp2(COLORS.ok.clone(), 0.035);
+  scene.fog = new THREE.FogExp2(COLORS.ok.clone(), 0.012);
 
   const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 120);
   const controls = new OrbitControls(camera, canvas);
@@ -426,16 +427,16 @@ export function mount(container, opts = {}) {
   controls.autoRotateSpeed = 0.5;
 
   // Lighting
-  scene.add(new THREE.HemisphereLight(0x6f8fb5, 0x0a0d12, 0.55));
-  const key = new THREE.SpotLight(0xcfe4ff, 120, 60, Math.PI / 4, 0.6, 1.6);
+  scene.add(new THREE.HemisphereLight(0x8fb0d8, 0x141a24, 1.5));
+  const key = new THREE.SpotLight(0xdbeaff, 900, 70, Math.PI / 3.2, 0.7, 1.4);
   key.position.set(3, 14, 9);
   key.castShadow = true;
   key.shadow.mapSize.set(1024, 1024);
   key.shadow.bias = -0.0004;
   scene.add(key);
   scene.add(key.target);
-  const rim = new THREE.PointLight(0x38bdf8, 25, 22, 1.8);
-  rim.position.set(-8, 3, -3);
+  const rim = new THREE.PointLight(0x38bdf8, 18, 26, 1.8);
+  rim.position.set(-9, 7, -4);
   scene.add(rim);
 
   // Floor: a mirror under a dark glossy overlay, plus a grid.
@@ -484,7 +485,7 @@ export function mount(container, opts = {}) {
   // Post-processing
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.85, 0.55, 0.35);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.5, 0.45, 0.62);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
   let bloomOn = true;
@@ -518,10 +519,10 @@ export function mount(container, opts = {}) {
     homeCamera();
   }
 
-  const home = { pos: new THREE.Vector3(0, 5.5, 14), target: new THREE.Vector3(0, 3.4, 0) };
+  const home = { pos: new THREE.Vector3(0, 4.6, 12), target: new THREE.Vector3(0, 2.9, 0) };
   function homeCamera() {
-    const d = 13 + Math.max(0, rackCount - 1) * 2.2;
-    home.pos.set(0, 5.8, d);
+    const d = 9.5 + Math.max(0, rackCount - 1) * 2.2;
+    home.pos.set(0, 4.6, d);
   }
 
   // ---- node entries
@@ -595,7 +596,7 @@ export function mount(container, opts = {}) {
       m.userData.entry = e;
       m.userData.pod = p;
       const col = i % 8, row = Math.floor(i / 8);
-      m.position.set((col - 3.5) * 0.17, 1.22 + row * 0.17, 0);
+      m.position.set((col - 3.5) * 0.15, 1.18 + row * 0.15, 0);
       e.pods.add(m);
     });
   }
@@ -745,7 +746,7 @@ export function mount(container, opts = {}) {
   let frames = 0, slow = 0;
   let flyIn = motion ? { t0: null, dur: 2.6 } : null;
   homeCamera();
-  camera.position.copy(motion ? new THREE.Vector3(0, 16, 30) : home.pos);
+  camera.position.copy(motion ? new THREE.Vector3(0, 14, 28) : home.pos);
   controls.target.copy(home.target);
 
   const tmp = new THREE.Color();
@@ -768,7 +769,7 @@ export function mount(container, opts = {}) {
       if (flyIn.t0 == null) flyIn.t0 = t;
       const k = Math.min(1, (t - flyIn.t0) / flyIn.dur);
       const e = 1 - Math.pow(1 - k, 3);
-      camera.position.lerpVectors(new THREE.Vector3(0, 16, 30 + rackCount * 2), home.pos, e);
+      camera.position.lerpVectors(new THREE.Vector3(0, 14, 26 + rackCount * 2), home.pos, e);
       if (k >= 1) { flyIn = null; idleSince = t; }
     } else if (anim) {
       const k = Math.min(1, (t - anim.t0) / anim.dur);
@@ -800,7 +801,7 @@ export function mount(container, opts = {}) {
       e.pods.position.y = motion ? Math.sin(t * 1.4 + e.bob) * 0.03 : 0;
 
       if (e.beacon) {
-        e.beacon.position.set(e.root.position.x, e.root.position.y + 1.95, e.root.position.z);
+        e.beacon.position.set(e.root.position.x, e.root.position.y + 1.62, e.root.position.z);
         if (motion) e.beacon.rotation.y += dt * 3;
         e.beacon.visible = motion ? Math.sin(t * 6) > -0.3 : true;
       }

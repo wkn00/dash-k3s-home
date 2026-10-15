@@ -41,6 +41,17 @@ attention is always at the top of the page.
 - **Live history without a metrics stack.** ~2 hours of sparkline history
   per node lives in an in-memory ring buffer — reset on restart, by design.
   This is a "right now" view, not a Prometheus replacement.
+- **A 3D server room, on request.** The Devices section has a
+  Cards | 3D Room toggle. The room shows every node as a procedurally built
+  model of what it physically is (laptop, mini-PC, Pi-style board, rack
+  server, VM): LED bars for CPU/memory/disk, spinning fans, a heat glow, a
+  battery ring, pods as orbs above it, cables to a central switch, and a red
+  beacon when something is wrong. Hover for numbers, click for the same
+  details as the card. three.js (r160) is vendored under
+  `internal/server/static/vendor/`, embedded in the binary and fetched only
+  the first time the room is opened; without WebGL the toggle is disabled and
+  the cards are unaffected. Unknown readings are drawn as a dim dotted bar,
+  never as zero.
 - **Read-only, cluster-wide, by design.** RBAC grants only `get/list/watch`;
   no write verb should ever be added.
 
@@ -73,7 +84,8 @@ internal/hw/           host hardware readers: SMBIOS, device-tree, battery, temp
 internal/agent/        agent HTTP handler (GET /hw)
 internal/state/        raw sample -> rendered snapshot (nullable fields, worst-first sort)
 internal/ring/         fixed-capacity in-memory ring buffer for sparkline history
-internal/server/       dashboard HTTP server + embedded static UI (go:embed)
+internal/server/       dashboard HTTP server + embedded UI (go:embed)
+internal/server/static/  3D room: room3d.js (scene), room3d-logic.js (pure, node-tested), vendor/ (three.js r160)
 k8s/                   deploy manifests, applied in numeric order
 ```
 
