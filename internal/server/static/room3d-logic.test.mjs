@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { modelFor, nodeIndicators, podsByNode, roomAlert, layoutPositions } from "./room3d-logic.js";
+import { modelFor, nodeIndicators, podsByNode, roomAlert, layoutRoom, PITCH } from "./room3d-logic.js";
 
 test("modelFor maps every device class the backend emits", () => {
   const want = { laptop: "laptop", tablet: "laptop", desktop: "minipc", "all-in-one": "minipc",
@@ -65,19 +65,36 @@ test("roomAlert", () => {
   assert.equal(roomAlert({ events: [{}] }), "warn");
 });
 
-test("layoutPositions is deterministic and order independent, control plane first", () => {
-  const nodes = [{ name: "wk3" }, { name: "wk0", controlPlane: true }, { name: "wk1" }, { name: "wk2" }, { name: "wk4" }];
-  const a = layoutPositions(nodes);
-  const b = layoutPositions([...nodes].reverse());
+test("layoutRoom is deterministic and order independent, control plane first", () => {
+  const nodes = [{ name: "wk3", deviceClass: "laptop" }, { name: "wk0", controlPlane: true, deviceClass: "laptop" },
+    { name: "wk1", deviceClass: "laptop" }, { name: "wk2" }];
+  const a = layoutRoom(nodes);
+  const b = layoutRoom([...nodes].reverse());
   assert.deepEqual(a, b);
-  assert.equal(a[0].name, "wk0");
-  assert.equal(a[0].shelf, 0);
-  assert.equal(a[4].name, "wk4"); // fifth node starts the second rack
-  assert.equal(a[4].shelf, 0);
-  assert.ok(a[4].x > a[0].x);
+  assert.equal(a.slots[0].name, "wk0");
+  assert.equal(a.trayCount, 4); // an unknown class is laptop-shaped by default
+  assert.equal(a.benchCount, 0);
 });
 
-test("layoutPositions with no nodes", () => {
-  assert.deepEqual(layoutPositions([]), []);
-  assert.deepEqual(layoutPositions(undefined), []);
+test("layoutRoom spaces tray laptops by PITCH and centres the row", () => {
+  const nodes = ["a", "b", "c"].map(name => ({ name, deviceClass: "laptop" }));
+  const { slots } = layoutRoom(nodes);
+  assert.ok(Math.abs(slots[1].x - slots[0].x - PITCH) < 1e-9);
+  assert.ok(Math.abs(slots[0].x + slots[2].x) < 1e-9);
+});
+
+test("layoutRoom puts non-laptops on the bench and starts a second tray row after twelve", () => {
+  const nodes = [{ name: "srv", deviceClass: "server" }, { name: "pi", deviceClass: "sbc" }];
+  for (let i = 0; i < 13; i++) nodes.push({ name: "l" + String(i).padStart(2, "0"), deviceClass: "laptop" });
+  const r = layoutRoom(nodes);
+  assert.equal(r.benchCount, 2);
+  assert.equal(r.rows, 2);
+  assert.equal(r.slots.filter(s => s.bench).length, 2);
+  assert.equal(r.slots.find(s => s.name === "l12").row, 1);
+});
+
+test("layoutRoom with no nodes", () => {
+  assert.deepEqual(layoutRoom([]).slots, []);
+  assert.deepEqual(layoutRoom(undefined).slots, []);
+  assert.equal(layoutRoom([]).rows, 1);
 });

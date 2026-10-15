@@ -63,22 +63,34 @@ export function roomAlert(snapshot) {
   return "ok";
 }
 
-// Deterministic placement, independent of input order: control plane first,
-// then by name. Nodes fill racks of four shelves; racks sit in a row.
-export const SHELVES_PER_RACK = 4;
-export const RACK_SPACING = 3.2;
+// Placement mirrors the physical setup: laptops stand on edge side by side in
+// one black tray (twelve to a row, extra rows behind), and anything that is
+// not laptop-shaped sits on the floor behind it. Deterministic and
+// independent of input order: control plane first, then by name.
+export const PITCH = 0.42;       // distance between neighbouring laptops
+export const ROW_LENGTH = 12;    // laptops per tray row
+export const ROW_GAP = 1.9;      // distance between tray rows
+export const BENCH_PITCH = 2.3;  // distance between non-laptop devices
+export const BENCH_Z = -2.6;
 
-export function layoutPositions(nodes) {
+export function inTray(deviceClass) {
+  const m = modelFor(deviceClass);
+  return m === "laptop" || m === "generic";
+}
+
+export function layoutRoom(nodes) {
   const sorted = [...(nodes || [])].sort((a, b) =>
     (b.controlPlane === true) - (a.controlPlane === true) || String(a.name).localeCompare(String(b.name)));
-  const racks = Math.max(1, Math.ceil(sorted.length / SHELVES_PER_RACK));
-  return sorted.map((n, i) => {
-    const rack = Math.floor(i / SHELVES_PER_RACK);
-    return {
-      name: n.name,
-      x: (rack - (racks - 1) / 2) * RACK_SPACING,
-      z: 0,
-      shelf: i % SHELVES_PER_RACK,
-    };
+  const tray = sorted.filter(n => inTray(n.deviceClass));
+  const bench = sorted.filter(n => !inTray(n.deviceClass));
+  const perRow = Math.min(ROW_LENGTH, Math.max(1, tray.length));
+  const slots = [];
+  tray.forEach((n, i) => {
+    const row = Math.floor(i / ROW_LENGTH), col = i % ROW_LENGTH;
+    slots.push({ name: n.name, bench: false, index: i, row, x: (col - (perRow - 1) / 2) * PITCH, z: -row * ROW_GAP });
   });
+  bench.forEach((n, j) => {
+    slots.push({ name: n.name, bench: true, index: tray.length + j, row: 0, x: (j - (bench.length - 1) / 2) * BENCH_PITCH, z: BENCH_Z });
+  });
+  return { slots, trayCount: tray.length, benchCount: bench.length, perRow, rows: Math.max(1, Math.ceil(tray.length / ROW_LENGTH)) };
 }

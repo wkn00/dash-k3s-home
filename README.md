@@ -42,16 +42,19 @@ attention is always at the top of the page.
   per node lives in an in-memory ring buffer — reset on restart, by design.
   This is a "right now" view, not a Prometheus replacement.
 - **A 3D server room, on request.** The Devices section has a
-  Cards | 3D Room toggle. The room shows every node as a procedurally built
-  model of what it physically is (laptop, mini-PC, Pi-style board, rack
-  server, VM): LED bars for CPU/memory/disk, spinning fans, a heat glow, a
-  battery ring, pods as orbs above it, cables to a central switch, and a red
-  beacon when something is wrong. Hover for numbers, click for the same
-  details as the card. three.js (r160) is vendored under
-  `internal/server/static/vendor/`, embedded in the binary and fetched only
-  the first time the room is opened; without WebGL the toggle is disabled and
-  the cards are unaffected. Unknown readings are drawn as a dim dotted bar,
-  never as zero.
+  Cards | 3D Room toggle. The room is modelled on a real homelab shelf:
+  laptop nodes stand on edge in a black pegboard tray with white patch
+  cables looping to a switch, in a white-panelled room with a wood floor
+  (non-laptops sit on the floor behind). Each device shows its live state:
+  LED bars along the top edge for CPU, memory, disk and battery, side vents
+  that glow with temperature, a blinking link LED, pods as orbs above it,
+  and a red beacon when something is wrong. It follows the page theme:
+  daylight normally, lights-out with glowing LEDs and bloom in dark mode.
+  Hover for numbers, click for the same details as the card. three.js
+  (r160) is vendored under `internal/server/static/vendor/`, embedded in the
+  binary and fetched only the first time the room is opened; without WebGL
+  the toggle is disabled and the cards are unaffected. Unknown readings are
+  drawn as a dim dotted bar, never as zero.
 - **Read-only, cluster-wide, by design.** RBAC grants only `get/list/watch`;
   no write verb should ever be added.
 

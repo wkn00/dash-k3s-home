@@ -1582,6 +1582,7 @@ function applyTheme(mode) {
     document.getElementById("theme-" + m).setAttribute("aria-pressed", String(m === mode));
   }
   try { localStorage.setItem(THEME_KEY, mode); } catch (err) { /* not fatal */ }
+  if (room) room.setDark(isDark());
   if (lastSnapshot) render(lastSnapshot);
 }
 
@@ -1604,6 +1605,14 @@ function webglAvailable() {
   try { return !!document.createElement("canvas").getContext("webgl2"); } catch (err) { return false; }
 }
 
+// The room follows the page theme: daylight normally, lights-out in dark mode.
+function isDark() {
+  const t = document.documentElement.getAttribute("data-theme");
+  if (t === "dark") return true;
+  if (t === "light") return false;
+  return typeof matchMedia === "function" && matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
 function roomMessage(text) { document.getElementById("room3d-msg").textContent = text || ""; }
 
 async function setView(v) {
@@ -1624,6 +1633,7 @@ async function setView(v) {
   try {
     const mod = await import("/static/room3d.js");
     room = mod.mount(document.getElementById("room3d"), {
+      dark: isDark(),
       onSelect(name) {
         const n = lastSnapshot && lastSnapshot.nodes.find(x => x.name === name);
         if (n) openDeviceModal(n, lastSnapshot);
@@ -1653,6 +1663,9 @@ function initView() {
     if (saved === "3d") setView("3d");
   }
   document.getElementById("view-cards").addEventListener("click", () => setView("cards"));
+  if (typeof matchMedia === "function") {
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (room) room.setDark(isDark()); });
+  }
   // Closing a device's details sends the camera back to the whole room.
   document.getElementById("device-modal").addEventListener("close", () => { if (room && room.selected) room.select(null, true); });
 }
