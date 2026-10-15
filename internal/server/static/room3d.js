@@ -24,9 +24,9 @@ import {
 
 const YAW = 0;                // square to the wall
 const WALL_Z = -5.2;
-const LAPTOP_SCALE = 1.65;    // laptops are drawn big enough to read from across the room
-const DEVICE_SCALE = 1.5;     // so are the other device models
-const LANE0 = 1.55;           // where the first cable lane runs in front of the tray
+const LAPTOP_SCALE = 2.0;     // laptops are drawn big enough to read from across the room
+const DEVICE_SCALE = 1.75;    // so are the other device models
+const LANE0 = 1.95;           // where the first cable lane runs in front of the tray
 const LANE_STEP = 0.06;
 
 const NIGHT_BG = {
@@ -184,89 +184,128 @@ function slabGeometry(L, H, T, r, bevel = 0.012) {
   return g;
 }
 
-// A closed ThinkPad standing on its edge: the ports face +z, the hinge strip
-// runs along the top, the bottom case (vents, service door) faces +x and the
-// lid's outer cover faces -x.
+// Fine speckle for the matte plastic: a bump map, shared by every laptop.
+let _grain = null;
+function grainTexture() {
+  if (_grain) return _grain;
+  _grain = canvasTex(128, 128, (x, w, h) => {
+    const img = x.createImageData(w, h);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = 120 + Math.random() * 110;
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255;
+    }
+    x.putImageData(img, 0, 0);
+  }, [3, 3]);
+  _grain.userData = { shared: true };
+  return _grain;
+}
+
+// A closed ThinkPad standing on its edge, after the real ones: matte black
+// grained plastic, a silver hinge strip and a battery barrel along the top,
+// a vented bottom case with a service door and stickers (+x), and the port
+// edge (+z) with a D-sub VGA, a shielded RJ45 with its link LED, two USB
+// ports and an HDMI/eSATA slot. The lid's outer cover faces -x.
 function buildLaptop(slot) {
   const group = new THREE.Group();
-  const T = 0.17, H = 0.95, L = 1.35;
-  const bottomT = T * 0.6, lidT = T * 0.38, seam = 0.006;
-  const matte = body(0x1c1d21, { metalness: 0.08, roughness: 0.62 });
-  const cover = body(0x24262b, { metalness: 0.1, roughness: 0.5 });
+  const T = 0.155, H = 0.95, L = 1.36;
+  const bottomT = T * 0.62, lidT = T * 0.36, seam = 0.006;
+  const grain = grainTexture();
+  const matte = body(0x191a1d, { metalness: 0.05, roughness: 0.74, bumpMap: grain, bumpScale: 0.7 });
+  const cover = body(0x1f2024, { metalness: 0.08, roughness: 0.58, bumpMap: grain, bumpScale: 0.45 });
   const bx = T / 2 - bottomT / 2, lx = -T / 2 + lidT / 2;
   const bottom = new THREE.Mesh(slabGeometry(L, H, bottomT, 0.07), matte);
   bottom.position.x = bx;
   const lid = new THREE.Mesh(slabGeometry(L, H, lidT, 0.07), cover);
   lid.position.x = lx - seam;
   group.add(bottom, lid);
-  const seamLine = box(0.004, H - 0.05, L - 0.06, body(0x040405), (bx - bottomT / 2 + lx + lidT / 2) / 2, H / 2, 0);
-  group.add(seamLine);
+  group.add(box(0.004, H - 0.05, L - 0.06, body(0x030304), (bx - bottomT / 2 + lx + lidT / 2) / 2, H / 2, 0));
 
-  // battery barrel and hinges along the top edge
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0, 16), body(0x101114, { roughness: 0.6 }));
-  barrel.rotation.x = Math.PI / 2;
-  barrel.position.set(0.01, H + 0.012, -0.14);
-  group.add(barrel);
-  const hingeMat = body(0x70757e, { metalness: 0.85, roughness: 0.32 });
-  for (const z of [-0.6, 0.34]) {
-    const h = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.16, 14), hingeMat);
-    h.rotation.x = Math.PI / 2;
-    h.position.set(0.0, H - 0.005, z);
-    group.add(h);
-    group.add(box(0.1, 0.05, 0.17, hingeMat, 0.0, H - 0.045, z));
+  // top edge: battery barrel, hinge strip and the silver hinge barrels
+  const tube = (r, len, color, x, y, z, rough = 0.6, metal = 0.1) => {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 18), body(color, { roughness: rough, metalness: metal }));
+    m.rotation.x = Math.PI / 2; m.position.set(x, y, z);
+    return m;
+  };
+  group.add(tube(0.058, 1.02, 0x0f1012, 0.012, H + 0.012, -0.13));
+  group.add(tube(0.036, 1.3, 0x141518, -0.035, H - 0.018, 0.0));
+  for (const z of [-0.56, 0.44]) {
+    group.add(tube(0.046, 0.22, 0x8a9099, -0.005, H - 0.004, z, 0.3, 0.85));
+    group.add(tube(0.05, 0.03, 0x2a2c31, -0.005, H - 0.004, z - 0.125, 0.5, 0.5));
+    group.add(tube(0.05, 0.03, 0x2a2c31, -0.005, H - 0.004, z + 0.125, 0.5, 0.5));
   }
-  group.add(box(0.08, 0.012, 0.16, body(0xb91c1c, { metalness: 0.1, roughness: 0.4 }), 0.0, H + 0.066, 0.52));
+  group.add(box(0.075, 0.012, 0.17, body(0xb91c1c, { metalness: 0.1, roughness: 0.4 }), 0.0, H + 0.074, 0.55));
+  group.add(box(0.03, 0.02, 0.012, body(0x050506), 0.0, H - 0.07, -0.6));        // lock slot (top rear)
 
-  // bottom case (+x): the exhaust vents and a service door
+  // bottom case (+x): hot vents, battery latch, grille, service door, stickers
   const faceX = bx + bottomT / 2 + 0.012;
-  group.add(box(0.006, 0.34, 0.62, body(0x25272c, { roughness: 0.7 }), faceX, 0.2, 0.3));
+  const dark = body(0x08090b, { roughness: 0.8 });
+  const panel = body(0x222428, { roughness: 0.7, bumpMap: grain, bumpScale: 0.5 });
+  group.add(box(0.006, 0.34, 0.62, panel, faceX, 0.2, 0.3));
   for (const [dz, dy] of [[-0.27, -0.13], [0.27, -0.13], [-0.27, 0.13], [0.27, 0.13]]) {
     const sc = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.006, 10), body(0x6c7078, { metalness: 0.8 }));
     sc.rotation.z = Math.PI / 2;
     sc.position.set(faceX + 0.004, 0.2 + dy, 0.3 + dz);
     group.add(sc);
   }
+  for (let i = 0; i < 7; i++) group.add(box(0.005, 0.02, 0.5, dark, faceX, 0.42 + i * 0.032, 0.36));   // intake grille
+  group.add(box(0.006, 0.07, 0.3, body(0x2c2f35, { metalness: 0.4, roughness: 0.5 }), faceX, 0.58, -0.35)); // battery latch
+  group.add(box(0.004, 0.1, 0.22, body(0xe8eaee, { roughness: 0.6 }), faceX, 0.3, -0.42));                 // label sticker
+  group.add(box(0.004, 0.07, 0.07, body(0x1d4ed8, { roughness: 0.5 }), faceX, 0.22, -0.2));              // blue sticker
+  group.add(box(0.004, 0.07, 0.07, body(0x9aa1ab, { metalness: 0.7, roughness: 0.4 }), faceX, 0.22, -0.55)); // silver sticker
   const ventMats = [];
   for (let i = 0; i < 7; i++) {
     const m = new THREE.MeshBasicMaterial({ color: 0x050607 });
-    group.add(box(0.005, 0.1, 0.02, m, faceX, 0.52, -0.55 + i * 0.045));
+    group.add(box(0.005, 0.1, 0.02, m, faceX, 0.8, -0.55 + i * 0.045));
     ventMats.push(m);
   }
   const power = new THREE.Mesh(new THREE.CircleGeometry(0.011, 10), led(BAR_GOOD));
   power.rotation.y = Math.PI / 2;
-  power.position.set(faceX + 0.004, 0.52, 0.5);
+  power.position.set(faceX + 0.004, 0.8, 0.5);
   group.add(power);
 
-  // port edge (+z): VGA, Ethernet, USB x2, HDMI, each in a recessed bezel
+  // port edge (+z), each port in a recessed bezel
   const portZ = L / 2 + 0.012;
-  const bezel = body(0x0b0c0e, { roughness: 0.7 });
-  const portsY = [0.8, 0.62, 0.47, 0.37, 0.22];
-  for (const y of portsY) group.add(box(0.12, 0.085, 0.01, bezel, 0, y, portZ - 0.004));
-  group.add(box(0.1, 0.05, 0.016, body(0x2f4a78), 0, 0.8, portZ + 0.004));
-  group.add(box(0.1, 0.07, 0.016, body(0x050506), 0, 0.62, portZ + 0.004));
+  const metal = body(0x9aa1ab, { metalness: 0.85, roughness: 0.3 });
+  for (const y of [0.81, 0.63, 0.47, 0.37, 0.22]) group.add(box(0.125, 0.085, 0.01, dark, 0, y, portZ - 0.004));
+  // VGA: a D-shaped shell with a blue pin block
+  const dsub = new THREE.Shape();
+  dsub.moveTo(-0.05, 0.022); dsub.lineTo(0.05, 0.022); dsub.lineTo(0.04, -0.022); dsub.lineTo(-0.04, -0.022); dsub.closePath();
+  const dg = new THREE.ExtrudeGeometry(dsub, { depth: 0.012, bevelEnabled: false });
+  const vga = new THREE.Mesh(dg, metal); vga.position.set(0, 0.81, portZ - 0.002); group.add(vga);
+  group.add(box(0.07, 0.026, 0.016, body(0x1b3a8a), 0, 0.81, portZ + 0.012));
+  // RJ45: shield, dark socket, gold contacts
+  group.add(box(0.1, 0.075, 0.014, metal, 0, 0.63, portZ + 0.002));
+  group.add(box(0.074, 0.05, 0.017, body(0x050506), 0, 0.63, portZ + 0.004));
+  group.add(box(0.05, 0.006, 0.018, body(0xd4af37, { metalness: 0.9, roughness: 0.3 }), 0, 0.615, portZ + 0.006));
+  // two USB ports with blue tongues, and HDMI
   for (const y of [0.47, 0.37]) {
-    group.add(box(0.1, 0.024, 0.016, body(0x9aa1ab, { metalness: 0.85, roughness: 0.3 }), 0, y, portZ + 0.004));
-    group.add(box(0.07, 0.008, 0.018, body(0x1d4ed8), 0, y, portZ + 0.006));
+    group.add(box(0.1, 0.026, 0.014, metal, 0, y, portZ + 0.002));
+    group.add(box(0.075, 0.009, 0.016, body(0x1d4ed8), 0, y, portZ + 0.006));
   }
-  group.add(box(0.1, 0.028, 0.016, body(0x16171a), 0, 0.22, portZ + 0.004));
+  const hdmi = new THREE.Shape();
+  hdmi.moveTo(-0.045, 0.012); hdmi.lineTo(0.045, 0.012); hdmi.lineTo(0.045, -0.002); hdmi.lineTo(0.035, -0.014); hdmi.lineTo(-0.035, -0.014); hdmi.lineTo(-0.045, -0.002); hdmi.closePath();
+  const hm = new THREE.Mesh(new THREE.ExtrudeGeometry(hdmi, { depth: 0.012, bevelEnabled: false }), body(0x0c0d0f));
+  hm.position.set(0, 0.22, portZ); group.add(hm);
+
   const linkLed = new THREE.Mesh(new THREE.CircleGeometry(0.011, 10), led(BAR_GOOD));
-  linkLed.position.set(-0.052, 0.665, portZ + 0.0135);
+  linkLed.position.set(-0.056, 0.672, portZ + 0.0135);
   group.add(linkLed);
   const plugColor = PLUGS[(slot ? slot.index : 0) % PLUGS.length];
-  const plug = box(0.072, 0.056, 0.1, mat(0xf4f4f4, { metalness: 0.05, roughness: 0.6 }), 0, 0.62, portZ + 0.065);
-  plug.add(box(0.076, 0.03, 0.04, mat(plugColor, { metalness: 0.05, roughness: 0.5 }), 0, 0, 0.022));
+  const plug = box(0.074, 0.058, 0.1, mat(0xf4f4f4, { metalness: 0.05, roughness: 0.6 }), 0, 0.63, portZ + 0.065);
+  plug.add(box(0.078, 0.03, 0.04, mat(plugColor, { metalness: 0.05, roughness: 0.5 }), 0, 0, 0.022));
+  plug.add(box(0.05, 0.04, 0.05, mat(0xe9eaec, { metalness: 0.02, roughness: 0.7 }), 0, 0, -0.07));   // strain relief
   group.add(plug);
 
   const bars = makeBars(0.8, "z", 4);
-  bars.group.position.set(0.01, H + 0.066, -0.14);
+  bars.group.position.set(0.012, H + 0.074, -0.13);
   group.add(bars.group);
 
   group.scale.setScalar(LAPTOP_SCALE);
   const ventCold = new THREE.Color(0x0a2a3a), ventWarm = new THREE.Color(0xfb923c).multiplyScalar(1.6), ventHot = new THREE.Color(0xef4444).multiplyScalar(2);
   return {
     group,
-    jack: new THREE.Vector3(0, 0.62 * LAPTOP_SCALE, (portZ + 0.115) * LAPTOP_SCALE),
-    glow: { w: 0.8, d: 2.9 },
+    jack: new THREE.Vector3(0, 0.63 * LAPTOP_SCALE, (portZ + 0.115) * LAPTOP_SCALE),
+    glow: { w: 0.95, d: 3.3 },
     update(ind, t, dt, motion) {
       const dead = !ind.ready;
       darken(group, dead);
@@ -734,7 +773,7 @@ export function mount(container, opts = {}) {
     const swW = Math.max(1.9, n * 0.2 + 0.8);
     const swZ = laneMax + 0.62;
     const front = swZ + 0.62;
-    const back = -1.7 - (layout.rows - 1) * ROW_GAP;
+    const back = -2.0 - (layout.rows - 1) * ROW_GAP;
     Object.assign(geo, { half, laneMax, swZ, swW, front, back });
     trayFront = front;
 
@@ -751,8 +790,8 @@ export function mount(container, opts = {}) {
       const inRow = Math.min(layout.perRow, layout.trayCount - r * layout.perRow);
       for (let i = 0; i <= inRow; i++) {
         const px = (i - inRow / 2) * PITCH;
-        for (const [pz, ph] of [[0.7, 0.85], [-0.55, 0.7]]) {
-          const p = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, ph, 12), peg);
+        for (const [pz, ph] of [[0.85, 1.0], [-0.65, 0.85]]) {
+          const p = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.055, ph, 12), peg);
           p.position.set(px, 0.05 + ph / 2, pz - r * ROW_GAP);
           furniture.add(p);
         }
@@ -779,7 +818,7 @@ export function mount(container, opts = {}) {
     const plank = mat(0x2a2d33, { metalness: 0.2, roughness: 0.55 });
     for (let sh = 0; sh < (layout.shelves || 0); sh++) {
       const inShelf = Math.min(PER_SHELF, layout.benchCount - sh * PER_SHELF);
-      const w = (inShelf - 1) * SHELF_PITCH + 3.6;
+      const w = (inShelf - 1) * SHELF_PITCH + 4.0;
       const y = SHELF_Y + sh * SHELF_GAP;
       furniture.add(box(w, 0.1, 2.1, plank, 0, y - 0.05, SHELF_Z));
       for (const sx of [-1, 1]) {
@@ -811,7 +850,7 @@ export function mount(container, opts = {}) {
     const root = new THREE.Group();
     const e = {
       name, root, kind: null, model: null, cur: null, target: null,
-      podInfo: null, glow: null, tag: makeTag(0.4), cable: null, pulses: [],
+      podInfo: null, glow: null, tag: makeTag(0.47), cable: null, pulses: [],
       lift: 0, bob: Math.random() * 6, slot: null, curve: null, builtFor: null, cableDirty: false,
     };
     root.add(e.tag);
@@ -978,9 +1017,9 @@ export function mount(container, opts = {}) {
     // the models read, far enough to take in the tray and any wall shelves
     const halfW = Math.max(layout.reach || 0, layout.half || 3) + 0.4;
     const depth = (layout.rows - 1) * ROW_GAP;
-    const top = layout.shelves ? SHELF_Y + (layout.shelves - 1) * SHELF_GAP + 1.5 : 2.0;
-    const d = Math.max(7.5, halfW * 1.15 + 2.0 + depth * 0.4, top * 2.1);
-    home.target.set(0, Math.max(0.8, top * 0.4), 0.35 - depth * 0.3);
+    const top = layout.shelves ? SHELF_Y + (layout.shelves - 1) * SHELF_GAP + 1.6 : 2.2;
+    const d = Math.max(8.4, halfW * 1.15 + 2.2 + depth * 0.4, top * 1.75);
+    home.target.set(0, Math.max(0.8, top * 0.38), 0.95 - depth * 0.3);
     home.pos.set(0, 1.5 + d * 0.36, home.target.z + d * 0.92);
     controls.maxDistance = Math.max(14, d * 1.9);
     if (!flyIn && !anim && !selected) { camera.position.copy(home.pos); controls.target.copy(home.target); }

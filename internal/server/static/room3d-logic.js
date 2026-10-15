@@ -67,15 +67,15 @@ export function roomAlert(snapshot) {
 // one black tray (twelve to a row, extra rows behind), and anything that is
 // not laptop-shaped sits on the floor behind it. Deterministic and
 // independent of input order: control plane first, then by name.
-export const PITCH = 0.58;       // distance between neighbouring laptops
+export const PITCH = 0.7;        // distance between neighbouring laptops
 export const ROW_LENGTH = 12;    // laptops per tray row
-export const ROW_GAP = 3.6;      // distance between tray rows
-export const SHELF_PITCH = 3.6;  // distance between devices on the wall shelf
+export const ROW_GAP = 4.4;      // distance between tray rows
+export const SHELF_PITCH = 4.1;  // distance between devices on the wall shelf
 export const PER_SHELF = 5;      // devices per shelf
-export const SHELF_Y = 2.5;      // height of the lowest shelf
-export const SHELF_GAP = 2.2;    // distance between shelves
+export const SHELF_Y = 3.1;      // height of the lowest shelf
+export const SHELF_GAP = 2.5;    // distance between shelves
 export const SHELF_Z = -3.9;     // shelves hang on the back wall
-export const TRAY_MARGIN = 0.7;  // tray overhang past the first/last laptop
+export const TRAY_MARGIN = 0.8;  // tray overhang past the first/last laptop
 
 export function inTray(deviceClass) {
   const m = modelFor(deviceClass);
