@@ -20,9 +20,10 @@ import { Reflector } from "three/addons/objects/Reflector.js";
 import {
   modelFor, nodeIndicators, podsByNode, roomAlert, layoutRoom,
   PITCH, ROW_GAP,
-} from "./room3d-logic.js?v=12";
+} from "./room3d-logic.js?v=13";
 
-const MAX_PODS_SHOWN = 24;    // per node; the label says how many more
+const POD_ROW = 16;           // pods drawn per node, in one row
+const MAX_PODS_SHOWN = POD_ROW; // the label says how many more
 const YAW = 0.5;              // the tray is turned so the port edges face the viewer
 const WALL_Z = -3.9;
 
@@ -48,7 +49,7 @@ const BAR_NODATA = new THREE.Color(0x4a5360);
 const PLUGS = [0xf2f2f2, 0x2563eb, 0xfacc15, 0x2563eb, 0x2563eb, 0xf2f2f2, 0x2563eb];
 
 // Shared, never disposed per node.
-const podGeo = new THREE.SphereGeometry(0.038, 12, 10);
+const podGeo = new THREE.BoxGeometry(0.06, 0.06, 0.06);
 const podOk = new THREE.MeshStandardMaterial({ color: 0x16a34a, emissive: 0x16a34a, emissiveIntensity: 0.9, roughness: 0.4 });
 const podBad = new THREE.MeshStandardMaterial({ color: 0xdc2626, emissive: 0xef4444, emissiveIntensity: 1.2, roughness: 0.4 });
 for (const o of [podGeo, podOk, podBad]) o.userData.shared = true;
@@ -165,68 +166,108 @@ function body(color, opts) {
 // eased indicator values (fractions, or null for unknown). `slot` is the
 // device's place in the layout, used to vary patch-cable plugs.
 
+// A rounded slab (L long, H tall, T thick, corner radius r) standing on its
+// bottom edge. Built by extruding a rounded rectangle so the corners and
+// edges are bevelled the way a real chassis is, not box-sharp.
+function slabGeometry(L, H, T, r, bevel = 0.012) {
+  const w = L / 2;
+  const sh = new THREE.Shape();
+  sh.moveTo(-w + r, 0); sh.lineTo(w - r, 0); sh.quadraticCurveTo(w, 0, w, r);
+  sh.lineTo(w, H - r); sh.quadraticCurveTo(w, H, w - r, H);
+  sh.lineTo(-w + r, H); sh.quadraticCurveTo(-w, H, -w, H - r);
+  sh.lineTo(-w, r); sh.quadraticCurveTo(-w, 0, -w + r, 0);
+  const g = new THREE.ExtrudeGeometry(sh, {
+    depth: Math.max(0.001, T - 2 * bevel), bevelEnabled: true, bevelThickness: bevel,
+    bevelSize: bevel, bevelSegments: 3, curveSegments: 8,
+  });
+  g.rotateY(-Math.PI / 2);          // shape x -> world z, extrusion -> world x
+  g.computeBoundingBox();
+  g.translate(-(g.boundingBox.min.x + g.boundingBox.max.x) / 2, 0, 0);
+  return g;
+}
+
 // A closed ThinkPad standing on its edge: the ports face +z, the hinge strip
-// runs along the top, the broad faces point along +/-x.
+// runs along the top, the bottom case (vents, service door) faces +x and the
+// lid's outer cover faces -x.
 function buildLaptop(slot) {
   const group = new THREE.Group();
   const T = 0.17, H = 0.95, L = 1.35;
-  const black = body(0x1b1c20, { metalness: 0.12, roughness: 0.55 });
-  const lid = body(0x232429, { metalness: 0.1, roughness: 0.5 });
-  group.add(box(T * 0.58, H, L, black, -T * 0.21, H / 2, 0));
-  group.add(box(T * 0.38, H, L, lid, T * 0.31, H / 2, 0));
-  group.add(box(0.006, H - 0.04, L - 0.04, body(0x050506), T * 0.08, H / 2, 0));
+  const bottomT = T * 0.6, lidT = T * 0.38, seam = 0.006;
+  const matte = body(0x1c1d21, { metalness: 0.08, roughness: 0.62 });
+  const cover = body(0x24262b, { metalness: 0.1, roughness: 0.5 });
+  const bx = T / 2 - bottomT / 2, lx = -T / 2 + lidT / 2;
+  const bottom = new THREE.Mesh(slabGeometry(L, H, bottomT, 0.07), matte);
+  bottom.position.x = bx;
+  const lid = new THREE.Mesh(slabGeometry(L, H, lidT, 0.07), cover);
+  lid.position.x = lx - seam;
+  group.add(bottom, lid);
+  const seamLine = box(0.004, H - 0.05, L - 0.06, body(0x040405), (bx - bottomT / 2 + lx + lidT / 2) / 2, H / 2, 0);
+  group.add(seamLine);
 
   // battery barrel and hinges along the top edge
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 1.05, 14), body(0x0e0f11, { roughness: 0.6 }));
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.0, 16), body(0x101114, { roughness: 0.6 }));
   barrel.rotation.x = Math.PI / 2;
-  barrel.position.set(-0.015, H + 0.005, -0.12);
+  barrel.position.set(0.01, H + 0.012, -0.14);
   group.add(barrel);
-  const hingeMat = body(0x7a7f87, { metalness: 0.8, roughness: 0.35 });
-  for (const z of [-0.58, 0.28]) {
-    const h = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.15, 12), hingeMat);
+  const hingeMat = body(0x70757e, { metalness: 0.85, roughness: 0.32 });
+  for (const z of [-0.6, 0.34]) {
+    const h = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.16, 14), hingeMat);
     h.rotation.x = Math.PI / 2;
-    h.position.set(0.04, H - 0.01, z);
+    h.position.set(0.0, H - 0.005, z);
     group.add(h);
+    group.add(box(0.1, 0.05, 0.17, hingeMat, 0.0, H - 0.045, z));
   }
-  group.add(box(0.1, 0.014, 0.2, body(0xb91c1c, { metalness: 0.1 }), 0.0, H + 0.05, 0.5));
+  group.add(box(0.08, 0.012, 0.16, body(0xb91c1c, { metalness: 0.1, roughness: 0.4 }), 0.0, H + 0.066, 0.52));
 
-  // port edge (+z): VGA, Ethernet, USB x2, HDMI
-  const portZ = L / 2;
-  group.add(box(0.1, 0.06, 0.016, body(0x2f4a78), 0, 0.8, portZ));
-  group.add(box(0.1, 0.075, 0.016, body(0x08090a), 0, 0.62, portZ));
-  group.add(box(0.1, 0.026, 0.016, body(0x9aa1ab, { metalness: 0.8 }), 0, 0.47, portZ));
-  group.add(box(0.1, 0.026, 0.016, body(0x9aa1ab, { metalness: 0.8 }), 0, 0.37, portZ));
-  group.add(box(0.1, 0.03, 0.016, body(0x1a1b1e), 0, 0.22, portZ));
-  const linkLed = new THREE.Mesh(new THREE.CircleGeometry(0.011, 8), led(BAR_GOOD));
-  linkLed.position.set(-0.055, 0.665, portZ + 0.0095);
-  group.add(linkLed);
-  const plugColor = PLUGS[(slot ? slot.index : 0) % PLUGS.length];
-  const plug = box(0.07, 0.055, 0.1, mat(0xf4f4f4, { metalness: 0.05, roughness: 0.6 }), 0, 0.62, portZ + 0.06);
-  plug.add(box(0.074, 0.03, 0.04, mat(plugColor, { metalness: 0.05, roughness: 0.5 }), 0, 0, 0.02));
-  group.add(plug);
-
-  // side vents (+x face) glow with temperature
+  // bottom case (+x): a service door with screws, and the exhaust vents
+  const faceX = bx + bottomT / 2 + 0.012;
+  group.add(box(0.006, 0.46, 0.62, body(0x25272c, { roughness: 0.7 }), faceX, 0.34, 0.12));
+  for (const [dz, dy] of [[-0.27, -0.2], [0.27, -0.2], [-0.27, 0.2], [0.27, 0.2]]) {
+    const sc = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.006, 10), body(0x6c7078, { metalness: 0.8 }));
+    sc.rotation.z = Math.PI / 2;
+    sc.position.set(faceX + 0.004, 0.34 + dy, 0.12 + dz);
+    group.add(sc);
+  }
   const ventMats = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 7; i++) {
     const m = new THREE.MeshBasicMaterial({ color: 0x050607 });
-    const v = box(0.004, 0.16, 0.022, m, T * 0.5 + 0.002, 0.26, -0.25 + i * 0.09);
-    group.add(v);
+    group.add(box(0.005, 0.15, 0.02, m, faceX, 0.76, -0.5 + i * 0.045));
     ventMats.push(m);
   }
-  const power = new THREE.Mesh(new THREE.CircleGeometry(0.012, 8), led(BAR_GOOD));
+  const power = new THREE.Mesh(new THREE.CircleGeometry(0.011, 10), led(BAR_GOOD));
   power.rotation.y = Math.PI / 2;
-  power.position.set(T * 0.5 + 0.003, H - 0.1, -0.62);
+  power.position.set(faceX + 0.004, H - 0.07, -0.63);
   group.add(power);
 
+  // port edge (+z): VGA, Ethernet, USB x2, HDMI, each in a recessed bezel
+  const portZ = L / 2 + 0.012;
+  const bezel = body(0x0b0c0e, { roughness: 0.7 });
+  const portsY = [0.8, 0.62, 0.47, 0.37, 0.22];
+  for (const y of portsY) group.add(box(0.12, 0.085, 0.01, bezel, 0, y, portZ - 0.004));
+  group.add(box(0.1, 0.05, 0.016, body(0x2f4a78), 0, 0.8, portZ + 0.004));
+  group.add(box(0.1, 0.07, 0.016, body(0x050506), 0, 0.62, portZ + 0.004));
+  for (const y of [0.47, 0.37]) {
+    group.add(box(0.1, 0.024, 0.016, body(0x9aa1ab, { metalness: 0.85, roughness: 0.3 }), 0, y, portZ + 0.004));
+    group.add(box(0.07, 0.008, 0.018, body(0x1d4ed8), 0, y, portZ + 0.006));
+  }
+  group.add(box(0.1, 0.028, 0.016, body(0x16171a), 0, 0.22, portZ + 0.004));
+  const linkLed = new THREE.Mesh(new THREE.CircleGeometry(0.011, 10), led(BAR_GOOD));
+  linkLed.position.set(-0.052, 0.665, portZ + 0.0135);
+  group.add(linkLed);
+  const plugColor = PLUGS[(slot ? slot.index : 0) % PLUGS.length];
+  const plug = box(0.072, 0.056, 0.1, mat(0xf4f4f4, { metalness: 0.05, roughness: 0.6 }), 0, 0.62, portZ + 0.065);
+  plug.add(box(0.076, 0.03, 0.04, mat(plugColor, { metalness: 0.05, roughness: 0.5 }), 0, 0, 0.022));
+  group.add(plug);
+
   const bars = makeBars(0.8, "z", 4);
-  bars.group.position.set(-0.015, H + 0.066, -0.12);
+  bars.group.position.set(0.01, H + 0.066, -0.14);
   group.add(bars.group);
 
   group.scale.setScalar(1.2);
   const ventCold = new THREE.Color(0x0a2a3a), ventWarm = new THREE.Color(0xfb923c).multiplyScalar(1.6), ventHot = new THREE.Color(0xef4444).multiplyScalar(2);
   return {
     group,
-    jack: new THREE.Vector3(0, 0.62 * 1.2, (portZ + 0.11) * 1.2),
+    jack: new THREE.Vector3(0, 0.62 * 1.2, (portZ + 0.115) * 1.2),
     update(ind, t, dt, motion) {
       const dead = !ind.ready;
       darken(group, dead);
@@ -622,11 +663,15 @@ export function mount(container, opts = {}) {
     const rowSpan = n * PITCH;
     const left = -rowSpan / 2 - 0.55 - 2.3;       // room on the left for the switch
     const right = rowSpan / 2 + 0.55;
-    const front = 1.2;
+    const front = Math.max(1.2, 1.02 + 0.06 * n + 0.22);
     const back = -1.2 - (layout.rows - 1) * ROW_GAP;
     const t = box(right - left, 0.05, front - back, traySurface, (left + right) / 2, 0.025, (front + back) / 2);
     t.receiveShadow = true;
     furniture.add(t);
+    const rimMat = mat(0x2a2d33, { metalness: 0.2, roughness: 0.5 });
+    const W = right - left, D = front - back, cx = (left + right) / 2, cz = (front + back) / 2;
+    furniture.add(box(W, 0.035, 0.05, rimMat, cx, 0.065, front - 0.025), box(W, 0.035, 0.05, rimMat, cx, 0.065, back + 0.025),
+      box(0.05, 0.035, D, rimMat, left + 0.025, 0.065, cz), box(0.05, 0.035, D, rimMat, right - 0.025, 0.065, cz));
 
     // the black pegs between laptops, front and back
     for (let r = 0; r < layout.rows; r++) {
@@ -645,13 +690,13 @@ export function mount(container, opts = {}) {
     switchLocal.set(left + 1.35, 0.05, 0.55);
     swGroup.position.copy(switchLocal);
     swGroup.add(box(2.0, 0.16, 0.5, mat(0x1a1d22, { metalness: 0.5, roughness: 0.45 }), 0, 0.08, 0));
-    for (let i = 0; i < 16; i++) {
+    for (let i = 0; i < 13; i++) {
       const m = led(BAR_GOOD);
-      const l = new THREE.Mesh(new THREE.CircleGeometry(0.022, 8), m);
-      l.position.set(-0.86 + i * 0.115, 0.115, 0.252);
+      const l = new THREE.Mesh(new THREE.CircleGeometry(0.02, 8), m);
+      l.position.set((i - 6) * 0.13, 0.118, 0.252);
       swGroup.add(l);
       swLeds.push(m);
-      swGroup.add(box(0.07, 0.045, 0.012, mat(0x050607), -0.86 + i * 0.115, 0.055, 0.252));
+      swGroup.add(box(0.075, 0.05, 0.012, mat(0x050607), (i - 6) * 0.13, 0.058, 0.252));
     }
 
     // power strip and cords behind the row
@@ -676,7 +721,7 @@ export function mount(container, opts = {}) {
     const root = new THREE.Group();
     const e = {
       name, root, kind: null, model: null, cur: null, target: null, pods: new THREE.Group(),
-      podKey: "", podInfo: null, tag: nameTag(name, 0.62), cable: null, pulses: [], beacon: null,
+      podKey: "", podInfo: null, tag: nameTag(name, 0.3), cable: null, pulses: [], beacon: null,
       lift: 0, bob: Math.random() * 6, slot: null, curve: null, builtFor: null, cableDirty: false,
     };
     root.add(e.pods);
@@ -698,35 +743,45 @@ export function mount(container, opts = {}) {
     return true;
   }
 
+  // One lane per cable, nested so none cross: a cable leaves its jack,
+  // drops to its own lane in front of the tray, runs left along that lane,
+  // then turns in to its switch port. Laptops further right take outer
+  // lanes and the switch ports in reverse order, which is what keeps the
+  // runs from crossing.
   function buildCable(e) {
     if (e.cable) { tray.remove(e.cable); disposeTree(e.cable); }
     e.cable = null; e.curve = null; e.pulses = [];
     if (!e.model || !e.model.jack) return;
+    const n = Math.max(1, layout.perRow);
+    const col = e.slot.index % layout.perRow;
     const x = e.root.position.x, z0 = e.root.position.z;
     const j = e.model.jack;
-    const start = new THREE.Vector3(x + j.x, 0.05 + j.y, z0 + j.z);
-    const lane = (e.slot.index % 5) * 0.075;
-    const toX = switchLocal.x + ((e.slot.index % 8) / 7 - 0.5) * 1.5;
-    const front = z0 + 1.12 + lane;
+    const y0 = 0.05 + j.y, zj = z0 + j.z;
+    const laneZ = z0 + 1.02 + 0.06 * col;
+    const portX = switchLocal.x + (6 - Math.floor((n - 1) / 2) + (n - 1 - col) - 6) * 0.13;
+    const swFront = switchLocal.z + 0.25;
+    const r = 0.1;                              // corner rounding
     const pts = [
-      start,
-      new THREE.Vector3(x, start.y - 0.04, start.z + 0.1),
-      new THREE.Vector3(x - 0.02, 0.32, start.z + 0.2),
-      new THREE.Vector3(x - 0.1, 0.08, front),
-      new THREE.Vector3((x + toX) / 2, 0.08, front + 0.04),
-      new THREE.Vector3(toX + 0.05, 0.1, switchLocal.z + 0.55 + lane * 0.3),
-      new THREE.Vector3(toX, 0.2, switchLocal.z + 0.3),
+      new THREE.Vector3(x, y0, zj),
+      new THREE.Vector3(x, y0 - 0.02, zj + 0.08),
+      new THREE.Vector3(x, 0.2, laneZ - 0.12),
+      new THREE.Vector3(x, 0.085, laneZ - r * 0.4),
+      new THREE.Vector3(x - r, 0.075, laneZ),
+      new THREE.Vector3(portX + r, 0.075, laneZ),
+      new THREE.Vector3(portX, 0.085, laneZ - r),
+      new THREE.Vector3(portX, 0.1, swFront + 0.1),
+      new THREE.Vector3(portX, 0.1, swFront),
     ];
-    e.curve = new THREE.CatmullRomCurve3(pts);
+    e.curve = new THREE.CatmullRomCurve3(pts, false, "centripetal");
     const tube = new THREE.Mesh(
-      new THREE.TubeGeometry(e.curve, 64, 0.02, 6, false),
-      new THREE.MeshStandardMaterial({ color: 0xf2f3f4, roughness: 0.55, metalness: 0 }));
+      new THREE.TubeGeometry(e.curve, 90, 0.019, 8, false),
+      new THREE.MeshStandardMaterial({ color: 0xf2f3f4, roughness: 0.5, metalness: 0 }));
     tube.castShadow = true;
     const g = new THREE.Group();
     g.add(tube);
-    for (let i = 0; i < 3; i++) {
-      const p = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x38bdf8).multiplyScalar(HOT) }));
-      p.userData.phase = i / 3;
+    for (let i = 0; i < 2; i++) {
+      const p = new THREE.Mesh(new THREE.SphereGeometry(0.026, 8, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x38bdf8).multiplyScalar(HOT) }));
+      p.userData.phase = i / 2;
       p.visible = motion;
       g.add(p);
       e.pulses.push(p);
@@ -745,9 +800,8 @@ export function mount(container, opts = {}) {
   }
 
   function podPos(e, i) {
-    const col = i % 8, row = Math.floor(i / 8);
-    if (e.kind === "laptop" || e.kind === "generic") return [(row - 1) * 0.12, 1.44, (col - 3.5) * 0.17];
-    return [(col - 3.5) * 0.15, 1.18 + row * 0.15, 0];
+    if (e.kind === "laptop" || e.kind === "generic") return [0, 1.5, (i - (POD_ROW - 1) / 2) * 0.1];
+    return [(i - (POD_ROW - 1) / 2) * 0.1, 1.2, 0];
   }
 
   function syncPods(e, info) {
@@ -770,7 +824,7 @@ export function mount(container, opts = {}) {
   function syncBeacon(e, bad) {
     if (bad && !e.beacon) {
       const g = new THREE.Group();
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.2, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xef4444).multiplyScalar(2.4) }));
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.14, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xef4444).multiplyScalar(2.4) }));
       cone.rotation.x = Math.PI;
       g.add(cone);
       e.beacon = g;
@@ -802,7 +856,7 @@ export function mount(container, opts = {}) {
       e.slot = slot;
       const rebuilt = setKind(e, modelFor(n.deviceClass));
       e.root.position.set(slot.x, 0.05, slot.z);
-      e.tag.position.set(0, slot.bench ? 1.75 : 1.75 + (slot.index % 2) * 0.2, 0);
+      e.tag.position.set(0, slot.bench ? 1.75 : 1.78, 0);
       if (isNew || rebuilt || e.cableDirty || oldIndex !== slot.index || oldX !== slot.x || oldZ !== slot.z) {
         buildCable(e);
         e.cableDirty = false;
@@ -1004,7 +1058,7 @@ export function mount(container, opts = {}) {
       e.pods.position.y = motion ? Math.sin(t * 1.4 + e.bob) * 0.025 : 0;
 
       if (e.beacon) {
-        e.beacon.position.set(e.root.position.x, 2.4, e.root.position.z);
+        e.beacon.position.set(e.root.position.x, 2.12, e.root.position.z);
         if (motion) e.beacon.rotation.y += dt * 3;
         e.beacon.visible = motion ? Math.sin(t * 6) > -0.3 : true;
       }
