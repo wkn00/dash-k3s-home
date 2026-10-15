@@ -5,8 +5,11 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"encoding/json"
+	"io/fs"
 	"log"
 	"net/http"
 	"strings"
@@ -113,16 +116,37 @@ func (s *Server) Handler() http.Handler {
 	return mux
 }
 
-// staticHandler pins the JavaScript content type rather than trusting the
-// host's mime database: browsers refuse to execute module scripts that
-// arrive as text/plain, and a distroless image has no mime.types to read.
+// staticHandler serves the embedded scripts. It pins the JavaScript content
+// type rather than trusting the host's mime database (browsers refuse module
+// scripts served as text/plain, and a distroless image has no mime.types),
+// and it revalidates on every load with a content-hash ETag. embed.FS has no
+// modification times, so without this a fixed max-age keeps a stale script in
+// browsers and in Cloudflare's edge for the whole window after a release.
 func staticHandler() http.Handler {
+	etags := map[string]string{}
+	_ = fs.WalkDir(staticFS, "static", func(p string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if b, err := staticFS.ReadFile(p); err == nil {
+			sum := sha256.Sum256(b)
+			etags["/"+p] = `"` + hex.EncodeToString(sum[:8]) + `"`
+		}
+		return nil
+	})
 	files := http.FileServerFS(staticFS)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, ".js") || strings.HasSuffix(r.URL.Path, ".mjs") {
 			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 		}
-		w.Header().Set("Cache-Control", "public, max-age=3600")
+		w.Header().Set("Cache-Control", "no-cache")
+		if tag, ok := etags[r.URL.Path]; ok {
+			w.Header().Set("ETag", tag)
+			if r.Header.Get("If-None-Match") == tag {
+				w.WriteHeader(http.StatusNotModified)
+				return
+			}
+		}
 		files.ServeHTTP(w, r)
 	})
 }

@@ -216,3 +216,31 @@ func TestStaticServesVendoredThree(t *testing.T) {
 		t.Errorf("missing file: status %d, want 404", resp.StatusCode)
 	}
 }
+
+func TestStaticRevalidatesWithETag(t *testing.T) {
+	ts := httptest.NewServer(newTestServer(t).Handler())
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/static/room3d.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	tag := resp.Header.Get("ETag")
+	if tag == "" {
+		t.Fatal("no ETag: a stale script would stay cached after a release")
+	}
+	if cc := resp.Header.Get("Cache-Control"); cc != "no-cache" {
+		t.Errorf("Cache-Control %q, want no-cache (revalidate every load)", cc)
+	}
+	req, _ := http.NewRequest("GET", ts.URL+"/static/room3d.js", nil)
+	req.Header.Set("If-None-Match", tag)
+	resp2, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusNotModified {
+		t.Errorf("matching If-None-Match: status %d, want 304", resp2.StatusCode)
+	}
+}

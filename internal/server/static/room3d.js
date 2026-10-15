@@ -20,7 +20,7 @@ import { Reflector } from "three/addons/objects/Reflector.js";
 import {
   modelFor, nodeIndicators, podsByNode, roomAlert, layoutRoom,
   PITCH, ROW_GAP,
-} from "./room3d-logic.js";
+} from "./room3d-logic.js?v=12";
 
 const MAX_PODS_SHOWN = 24;    // per node; the label says how many more
 const YAW = 0.5;              // the tray is turned so the port edges face the viewer

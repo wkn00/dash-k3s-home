@@ -1631,7 +1631,7 @@ async function setView(v) {
   roomLoading = true;
   roomMessage("Loading the 3D room…");
   try {
-    const mod = await import("/static/room3d.js");
+    const mod = await import("/static/room3d.js?v=12");
     room = mod.mount(document.getElementById("room3d"), {
       dark: isDark(),
       onSelect(name) {
