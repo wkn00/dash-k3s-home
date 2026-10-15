@@ -1623,7 +1623,7 @@ async function setView(v) {
   document.getElementById("nodes").hidden = want3d;
   document.getElementById("room3d").hidden = !want3d;
   document.getElementById("devices-hint").textContent = want3d
-    ? "Drag to orbit · scroll to zoom · click a device for details"
+    ? "Drag to orbit · scroll to zoom · click a device, or use ‹ › to step through them"
     : "Click a device for details";
   try { localStorage.setItem(VIEW_KEY, v); } catch (err) { /* not fatal */ }
   if (!want3d) { if (room) room.setVisible(false); return; }
@@ -1634,7 +1634,7 @@ async function setView(v) {
     const mod = await import("/static/room3d.js?v=13");
     room = mod.mount(document.getElementById("room3d"), {
       dark: isDark(),
-      onSelect(name) {
+      onDetails(name) {
         const n = lastSnapshot && lastSnapshot.nodes.find(x => x.name === name);
         if (n) openDeviceModal(n, lastSnapshot);
       },
@@ -1666,8 +1666,6 @@ function initView() {
   if (typeof matchMedia === "function") {
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { if (room) room.setDark(isDark()); });
   }
-  // Closing a device's details sends the camera back to the whole room.
-  document.getElementById("device-modal").addEventListener("close", () => { if (room && room.selected) room.select(null, true); });
 }
 
 async function tick() {

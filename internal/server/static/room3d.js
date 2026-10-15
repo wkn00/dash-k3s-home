@@ -22,7 +22,7 @@ import {
   PITCH, ROW_GAP,
 } from "./room3d-logic.js?v=13";
 
-const YAW = 0.5;              // the tray is turned so the port edges face the viewer
+const YAW = 0;                // square to the wall
 const WALL_Z = -3.9;
 
 const NIGHT_BG = {
@@ -520,8 +520,10 @@ function makeTag(scale = 1) {
   c.width = 512; c.height = 128;
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-  s.scale.set(1.3 * scale, 0.325 * scale, 1);
+  tex.anisotropy = 8;
+  const s = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.3 * scale, 0.325 * scale),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false }));
   s.userData.canvas = c;
   s.userData.key = "";
   return s;
@@ -580,6 +582,30 @@ export function mount(container, opts = {}) {
     "border:1px solid rgba(120,160,200,.35)";
   container.appendChild(label);
 
+  // ---- navigation overlay: prev / home / next, and a small info card
+  const css = (n, text) => { n.style.cssText = text; return n; };
+  const GLASS = "background:rgba(10,16,24,.82);border:1px solid rgba(140,170,200,.28);color:#e6edf5;backdrop-filter:blur(8px);";
+  const navWrap = css(document.createElement("div"), "position:absolute;left:0;right:0;bottom:14px;display:flex;justify-content:center;pointer-events:none;z-index:3;");
+  const pill = css(document.createElement("div"), "pointer-events:auto;display:flex;align-items:center;gap:2px;padding:4px;border-radius:999px;font:500 12px system-ui,sans-serif;" + GLASS);
+  const navBtn = (text, aria, fn) => {
+    const b = css(document.createElement("button"), "all:unset;box-sizing:border-box;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;cursor:pointer;font:600 18px/1 system-ui,sans-serif;color:#e6edf5;");
+    b.type = "button"; b.textContent = text; b.setAttribute("aria-label", aria); b.title = aria;
+    b.addEventListener("click", fn);
+    b.addEventListener("pointerenter", () => { b.style.background = "rgba(140,170,200,.22)"; });
+    b.addEventListener("pointerleave", () => { b.style.background = ""; });
+    b.addEventListener("focus", () => { b.style.outline = "2px solid #38bdf8"; });
+    b.addEventListener("blur", () => { b.style.outline = ""; });
+    return b;
+  };
+  const navStatus = css(document.createElement("span"), "min-width:132px;text-align:center;padding:0 8px;white-space:nowrap;color:#b8c7d8;");
+  pill.append(navBtn("\u2039", "Previous device (Left arrow)", () => step(-1)), navBtn("\u2302", "Whole room (Esc)", () => select(null)), navBtn("\u203A", "Next device (Right arrow)", () => step(1)));
+  pill.insertBefore(navStatus, pill.children[2]);
+  navWrap.appendChild(pill);
+  container.appendChild(navWrap);
+
+  const card = css(document.createElement("div"), "position:absolute;top:12px;right:12px;width:236px;display:none;padding:12px 14px;border-radius:12px;font:12px/1.45 system-ui,sans-serif;z-index:3;" + GLASS);
+  container.appendChild(card);
+
   const scene = new THREE.Scene();
   scene.background = DAY_BG.clone();
   scene.fog = new THREE.FogExp2(DAY_BG.clone(), 0.012);
@@ -587,10 +613,14 @@ export function mount(container, opts = {}) {
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 140);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
-  controls.maxPolarAngle = Math.PI * 0.49;
-  controls.minDistance = 2;
-  controls.maxDistance = 40;
-  controls.autoRotateSpeed = 0.45;
+  controls.enablePan = false;               // prev/next/home move the view; no way to get lost
+  controls.minPolarAngle = 0.4;
+  controls.maxPolarAngle = 1.38;
+  controls.minAzimuthAngle = -1.15;
+  controls.maxAzimuthAngle = 1.15;
+  controls.minDistance = 2.4;
+  controls.maxDistance = 22;
+  controls.rotateSpeed = 0.6;
 
   // Lighting: a window-style sun for the day, a cool lamp for the night.
   const hemi = new THREE.HemisphereLight(0xdfe9f5, 0xb8a58f, 1.1);
@@ -650,9 +680,10 @@ export function mount(container, opts = {}) {
   const swGroup = new THREE.Group();
   tray.add(swGroup);
   const swLeds = [];
+  let trayFront = 1.2;
   const emptyTag = makeTag(1);
   drawTag(emptyTag, "No nodes reported", null);
-  emptyTag.position.set(0, 1.2, 0);
+  emptyTag.position.set(0, 0.9, 0.6);
   emptyTag.visible = false;
   tray.add(emptyTag);
 
@@ -695,6 +726,7 @@ export function mount(container, opts = {}) {
     const left = -rowSpan / 2 - 0.55 - 2.3;       // room on the left for the switch
     const right = rowSpan / 2 + 0.55;
     const front = Math.max(1.2, 1.02 + 0.06 * n + 0.22);
+    trayFront = front;
     const back = -1.2 - (layout.rows - 1) * ROW_GAP;
     const t = box(right - left, 0.05, front - back, traySurface, (left + right) / 2, 0.025, (front + back) / 2);
     t.receiveShadow = true;
@@ -752,7 +784,7 @@ export function mount(container, opts = {}) {
     const root = new THREE.Group();
     const e = {
       name, root, kind: null, model: null, cur: null, target: null,
-      podInfo: null, glow: null, tag: makeTag(0.36), cable: null, pulses: [],
+      podInfo: null, glow: null, tag: makeTag(0.32), cable: null, pulses: [],
       lift: 0, bob: Math.random() * 6, slot: null, curve: null, builtFor: null, cableDirty: false,
     };
     root.add(e.tag);
@@ -881,7 +913,10 @@ export function mount(container, opts = {}) {
       e.slot = slot;
       const rebuilt = setKind(e, modelFor(n.deviceClass));
       e.root.position.set(slot.x, slot.bench ? 0 : 0.05, slot.z);
-      e.tag.position.set(0, slot.bench ? 1.55 : 1.62, 0);
+      // name plate lying on the tray's front rim (or the floor in front of a
+      // bench device), tilted back toward the viewer
+      e.tag.rotation.x = -1.05;
+      e.tag.position.set(0, slot.bench ? 0.05 : 0.07 - 0.0, (slot.bench ? 1.2 : trayFront - slot.z + 0.1));
       if (isNew || rebuilt || e.cableDirty || oldIndex !== slot.index || oldX !== slot.x || oldZ !== slot.z) {
         buildCable(e);
         e.cableDirty = false;
@@ -897,18 +932,23 @@ export function mount(container, opts = {}) {
     }
     alert = roomAlert(snap);
     if (hovered) showLabel(hovered);
+    if (selected && !entries.has(selected)) select(null, true);
+    renderCard();
+    updateNavStatus();
   }
 
   // ---- camera
   const home = { pos: new THREE.Vector3(3.6, 4.2, 8), target: new THREE.Vector3(0, 0.55, 0) };
   let anim = null;
-  let flyIn = motion ? { t0: null, dur: 2.8 } : null;
+  let flyIn = motion ? { t0: null, dur: 1.8 } : null;
   function flyStart(out) { return out.set(home.pos.x * 1.6, home.pos.y + 9, home.pos.z * 1.7); }
   function frameCamera() {
     const span = Math.max(3, layout.perRow * PITCH + 3.2) + (layout.rows - 1) * ROW_GAP;
     const d = 2.6 + span * 0.66 + (layout.benchCount ? 1.8 : 0);
-    home.target.set(-0.5 - layout.perRow * 0.04, 0.55, layout.benchCount ? -0.6 : 0.1);
-    home.pos.set(home.target.x + d * 0.42, 1.2 + d * 0.38, home.target.z + d * 0.9);
+    // centre of the tray (the switch end included), looked at nearly head-on
+    home.target.set(-1.15, 0.55, layout.benchCount ? -0.6 : 0.1);
+    home.pos.set(home.target.x + d * 0.05, 1.0 + d * 0.42, home.target.z + d * 0.9);
+    controls.maxDistance = Math.max(10, d * 1.9);
     if (!flyIn && !anim && !selected) { camera.position.copy(home.pos); controls.target.copy(home.target); }
   }
 
@@ -924,11 +964,16 @@ export function mount(container, opts = {}) {
     if (e) {
       e.root.getWorldPosition(_w);
       const dir = new THREE.Vector3(Math.sin(YAW), 0, Math.cos(YAW));
-      const far = e.slot && e.slot.bench ? 5 : 3.6;
-      glide(_w.clone().addScaledVector(dir, far).add(new THREE.Vector3(0, 1.7, 0)), _w.clone().add(new THREE.Vector3(0, 0.55, 0)));
+      const far = e.slot && e.slot.bench ? 4.6 : 3.4;
+      glide(_w.clone().addScaledVector(dir, far).add(new THREE.Vector3(0, 1.5, 0)), _w.clone().add(new THREE.Vector3(0, 0.5, 0)));
     } else {
       glide(home.pos, home.target);
     }
+    if (e && e.model && e.model.glow) selGlow.scale.set(e.model.glow.w * 1.7, e.model.glow.d * 1.25, 1);
+    else selGlow.scale.set(2.2, 2.2, 1);
+    selGlow.visible = !!e;
+    renderCard();
+    updateNavStatus();
     if (!silent && opts.onSelect) opts.onSelect(selected);
   }
 
@@ -939,6 +984,67 @@ export function mount(container, opts = {}) {
       `CPU ${pct(ind.cpu)}   MEM ${pct(ind.mem)}   DISK ${pct(ind.disk)}\n` +
       `${pi.total} pods${pi.unhealthy ? `, ${pi.unhealthy} unhealthy` : ""}`;
     label.style.display = "block";
+  }
+
+  // A soft cyan glow under the selected device.
+  const selGlow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
+    color: new THREE.Color(0x38bdf8).multiplyScalar(1.4), map: glowTexture(), transparent: true, opacity: 0.0,
+    blending: THREE.AdditiveBlending, depthWrite: false,
+  }));
+  selGlow.rotation.x = -Math.PI / 2;
+  selGlow.visible = false;
+  scene.add(selGlow);
+
+  function updateNavStatus() {
+    const names = layout.slots.map(sl => sl.name);
+    navStatus.textContent = selected && names.includes(selected)
+      ? `${selected} · ${names.indexOf(selected) + 1} of ${names.length}`
+      : names.length ? `${names.length} device${names.length === 1 ? "" : "s"}` : "No devices";
+  }
+
+  function step(dir) {
+    const names = layout.slots.map(sl => sl.name).filter(n => entries.has(n));
+    if (!names.length) return;
+    const i = selected ? names.indexOf(selected) : (dir > 0 ? -1 : 0);
+    select(names[(i + dir + names.length) % names.length]);
+  }
+
+  const cardRow = (label, frac, text) => {
+    const row = css(document.createElement("div"), "display:grid;grid-template-columns:34px 1fr 38px;align-items:center;gap:8px;margin-top:5px;");
+    const l = css(document.createElement("span"), "color:#8fa3b8;"); l.textContent = label;
+    const track = css(document.createElement("span"), "height:6px;border-radius:3px;background:rgba(140,170,200,.18);overflow:hidden;display:block;");
+    const fill = css(document.createElement("span"), `display:block;height:100%;border-radius:3px;width:${frac == null ? 0 : Math.round(frac * 100)}%;background:${frac == null ? "transparent" : frac < 0.6 ? "#22c55e" : frac < 0.85 ? "#f59e0b" : "#ef4444"};`);
+    track.appendChild(fill);
+    const v = css(document.createElement("span"), "text-align:right;font-variant-numeric:tabular-nums;"); v.textContent = text;
+    row.append(l, track, v);
+    return row;
+  };
+
+  function renderCard() {
+    const e = selected ? entries.get(selected) : null;
+    if (!e || !e.target) { card.style.display = "none"; return; }
+    const ind = e.target, n = e.info || {}, pi = e.podInfo || { total: 0, unhealthy: 0 };
+    const head = css(document.createElement("div"), "display:flex;align-items:center;gap:8px;");
+    const dotColor = !ind.ready ? "#ef4444" : pi.unhealthy ? "#f59e0b" : "#22c55e";
+    const dot = css(document.createElement("span"), `width:9px;height:9px;border-radius:50%;background:${dotColor};flex:none;`);
+    const title = css(document.createElement("strong"), "font-size:14px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;");
+    title.textContent = n.displayName || e.name;
+    const close = navBtn("\u00d7", "Close (Esc)", () => select(null));
+    close.style.width = close.style.height = "26px";
+    head.append(dot, title, close);
+    const sub = css(document.createElement("div"), "color:#8fa3b8;margin:2px 0 6px 17px;");
+    sub.textContent = [ind.ready ? "Ready" : "Not ready", n.deviceModel || n.deviceClass, n.internalIP].filter(Boolean).join(" · ");
+    const rows = [
+      cardRow("CPU", ind.cpu, pct(ind.cpu)), cardRow("Mem", ind.mem, pct(ind.mem)), cardRow("Disk", ind.disk, pct(ind.disk)),
+    ];
+    if (ind.battery != null) rows.push(cardRow("Batt", ind.battery, pct(ind.battery) + (ind.charging ? "\u26a1" : "")));
+    const foot = css(document.createElement("div"), "margin-top:9px;color:#b8c7d8;");
+    foot.textContent = `${ind.tempC == null ? "\u2014" : Math.round(ind.tempC) + "\u00b0C"} \u00b7 ${pi.total} pod${pi.total === 1 ? "" : "s"}${pi.unhealthy ? `, ${pi.unhealthy} unhealthy` : ""}`;
+    const more = css(document.createElement("button"), "all:unset;box-sizing:border-box;cursor:pointer;margin-top:10px;width:100%;text-align:center;padding:7px;border-radius:8px;background:rgba(56,189,248,.16);color:#7dd3fc;font-weight:600;");
+    more.type = "button"; more.textContent = "Open details";
+    more.addEventListener("click", () => { if (opts.onDetails) opts.onDetails(e.name); });
+    card.replaceChildren(head, sub, ...rows, foot, more);
+    card.style.display = "block";
   }
 
   // ---- input
@@ -966,7 +1072,14 @@ export function mount(container, opts = {}) {
     const hit = pick();
     select(hit ? hit.entry.name : null);
   });
-  function onKey(ev) { if (ev.key === "Escape" && visible && selected) select(null); }
+  function onKey(ev) {
+    if (!visible || document.querySelector("dialog[open]")) return;
+    const tag = ev.target && ev.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (ev.key === "Escape" && selected) select(null);
+    else if (ev.key === "ArrowRight") { step(1); ev.preventDefault(); }
+    else if (ev.key === "ArrowLeft") { step(-1); ev.preventDefault(); }
+  }
   window.addEventListener("keydown", onKey);
 
   function pick() {
@@ -1041,8 +1154,6 @@ export function mount(container, opts = {}) {
       camera.position.lerpVectors(anim.fp, anim.tp, e);
       controls.target.lerpVectors(anim.ft, anim.tt, e);
       if (k >= 1) { anim = null; idleSince = t; }
-    } else if (motion && !selected && t - idleSince > 10) {
-      controls.autoRotate = true;
     }
     controls.update();
 
@@ -1095,6 +1206,14 @@ export function mount(container, opts = {}) {
       m.color.copy(BAR_GOOD).multiplyScalar(on ? 1 : 0.15);
     });
 
+    if (selected && entries.has(selected)) {
+      const se = entries.get(selected);
+      se.root.getWorldPosition(_w);
+      selGlow.position.set(_w.x, 0.016, _w.z);
+      selGlow.rotation.z = -YAW;
+      selGlow.material.opacity = motion ? 0.55 + 0.15 * Math.sin(t * 2.4) : 0.6;
+    }
+
     if (pointerMoved && pointerInside && !downAt) {
       pointerMoved = false;
       const hit = pick();
@@ -1141,6 +1260,8 @@ export function mount(container, opts = {}) {
     renderer.dispose();
     canvas.remove();
     label.remove();
+    navWrap.remove();
+    card.remove();
   }
 
   resize();
