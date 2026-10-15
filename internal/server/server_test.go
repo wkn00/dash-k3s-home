@@ -184,3 +184,35 @@ func TestRunStopsWithContext(t *testing.T) {
 		t.Fatal("Run did not return after the context was cancelled")
 	}
 }
+
+func TestStaticServesVendoredThree(t *testing.T) {
+	ts := httptest.NewServer(newTestServer(t).Handler())
+	defer ts.Close()
+
+	for _, p := range []string{
+		"/static/vendor/three.module.min.js",
+		"/static/vendor/postprocessing/UnrealBloomPass.js",
+		"/static/vendor/controls/OrbitControls.js",
+	} {
+		resp, err := http.Get(ts.URL + p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			t.Errorf("%s: status %d, want 200", p, resp.StatusCode)
+		}
+		if ct := resp.Header.Get("Content-Type"); !strings.Contains(ct, "javascript") {
+			t.Errorf("%s: Content-Type %q, want javascript (module scripts are rejected otherwise)", p, ct)
+		}
+	}
+
+	resp, err := http.Get(ts.URL + "/static/nope.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 404 {
+		t.Errorf("missing file: status %d, want 404", resp.StatusCode)
+	}
+}

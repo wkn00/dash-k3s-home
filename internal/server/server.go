@@ -5,10 +5,11 @@ package server
 
 import (
 	"context"
-	_ "embed"
+	"embed"
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +21,12 @@ import (
 
 //go:embed ui.html
 var uiHTML []byte
+
+// The 3D room's scripts: vendored three.js plus our own modules. They are
+// served same-origin, so the page still loads nothing from the network.
+//
+//go:embed static
+var staticFS embed.FS
 
 type Server struct {
 	client   *kube.Client
@@ -102,5 +109,20 @@ func (s *Server) Handler() http.Handler {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write(uiHTML)
 	})
+	mux.Handle("GET /static/", staticHandler())
 	return mux
+}
+
+// staticHandler pins the JavaScript content type rather than trusting the
+// host's mime database: browsers refuse to execute module scripts that
+// arrive as text/plain, and a distroless image has no mime.types to read.
+func staticHandler() http.Handler {
+	files := http.FileServerFS(staticFS)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, ".js") || strings.HasSuffix(r.URL.Path, ".mjs") {
+			w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		}
+		w.Header().Set("Cache-Control", "public, max-age=3600")
+		files.ServeHTTP(w, r)
+	})
 }
