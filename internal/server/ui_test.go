@@ -27,6 +27,12 @@ func TestPageIsSelfContained(t *testing.T) {
 		`id="nodes"`,
 		`id="events"`,
 		`id="degraded"`,
+		// The 3D room: toggle, container, import map and the lazily
+		// imported same-origin module.
+		`id="view-3d"`,
+		`id="room3d"`,
+		`type="importmap"`,
+		`/static/room3d.js`,
 	} {
 		if !strings.Contains(page, required) {
 			t.Errorf("page is missing %q", required)
