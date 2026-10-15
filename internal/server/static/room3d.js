@@ -19,21 +19,26 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { Reflector } from "three/addons/objects/Reflector.js";
 import {
   modelFor, nodeIndicators, podsByNode, roomAlert, layoutRoom,
-  PITCH, ROW_GAP,
+  PITCH, ROW_GAP, TRAY_MARGIN, SHELF_Y, SHELF_GAP, SHELF_Z, SHELF_PITCH, PER_SHELF,
 } from "./room3d-logic.js?v=13";
 
 const YAW = 0;                // square to the wall
-const WALL_Z = -3.9;
+const WALL_Z = -5.2;
+const LAPTOP_SCALE = 1.65;    // laptops are drawn big enough to read from across the room
+const DEVICE_SCALE = 1.5;     // so are the other device models
+const LANE0 = 1.55;           // where the first cable lane runs in front of the tray
+const LANE_STEP = 0.06;
 
 const NIGHT_BG = {
   ok: new THREE.Color(0x0b1622),
   warn: new THREE.Color(0x2a1d08),
   bad: new THREE.Color(0x2a0f12),
 };
+const CABLE_NIGHT = new THREE.Color(0x7d8794);
 const DAY_BG = new THREE.Color(0xdde4ec);
 const ALERT_TINT = { ok: new THREE.Color(0xffffff), warn: new THREE.Color(0xffe2a8), bad: new THREE.Color(0xffb0a8) };
-const WALL_DAY = new THREE.Color(0xf6f7f8), WALL_NIGHT = new THREE.Color(0x232b38);
-const FLOOR_DAY = new THREE.Color(0xffffff), FLOOR_NIGHT = new THREE.Color(0x3d4350);
+const WALL_DAY = new THREE.Color(0xf6f7f8), WALL_NIGHT = new THREE.Color(0x3a4558);
+const FLOOR_DAY = new THREE.Color(0xffffff), FLOOR_NIGHT = new THREE.Color(0x5a6272);
 
 // LED colours are pushed past 1.0 on purpose: only values above the bloom
 // threshold glow, so the LEDs bloom and the white walls do not.
@@ -256,12 +261,12 @@ function buildLaptop(slot) {
   bars.group.position.set(0.01, H + 0.066, -0.14);
   group.add(bars.group);
 
-  group.scale.setScalar(1.2);
+  group.scale.setScalar(LAPTOP_SCALE);
   const ventCold = new THREE.Color(0x0a2a3a), ventWarm = new THREE.Color(0xfb923c).multiplyScalar(1.6), ventHot = new THREE.Color(0xef4444).multiplyScalar(2);
   return {
     group,
-    jack: new THREE.Vector3(0, 0.62 * 1.2, (portZ + 0.115) * 1.2),
-    glow: { w: 0.55, d: 2.0 },
+    jack: new THREE.Vector3(0, 0.62 * LAPTOP_SCALE, (portZ + 0.115) * LAPTOP_SCALE),
+    glow: { w: 0.8, d: 2.9 },
     update(ind, t, dt, motion) {
       const dead = !ind.ready;
       darken(group, dead);
@@ -618,7 +623,7 @@ export function mount(container, opts = {}) {
   controls.maxPolarAngle = 1.38;
   controls.minAzimuthAngle = -1.15;
   controls.maxAzimuthAngle = 1.15;
-  controls.minDistance = 2.4;
+  controls.minDistance = 3;
   controls.maxDistance = 22;
   controls.rotateSpeed = 0.6;
 
@@ -626,18 +631,19 @@ export function mount(container, opts = {}) {
   const hemi = new THREE.HemisphereLight(0xdfe9f5, 0xb8a58f, 1.1);
   scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff3e0, 2.6);
-  sun.position.set(-7, 9, 6);
+  sun.position.set(-6, 11, 8);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -9; sun.shadow.camera.right = 9;
-  sun.shadow.camera.top = 9; sun.shadow.camera.bottom = -9;
+  sun.shadow.camera.left = -15; sun.shadow.camera.right = 15;
+  sun.shadow.camera.top = 15; sun.shadow.camera.bottom = -15;
   sun.shadow.camera.near = 1; sun.shadow.camera.far = 40;
   sun.shadow.bias = -0.0004;
   sun.shadow.normalBias = 0.02;
   sun.shadow.radius = 4;
   scene.add(sun);
-  const lamp = new THREE.SpotLight(0xa9c8ff, 0, 60, Math.PI / 3.4, 0.8, 1.4);
-  lamp.position.set(3, 9, 8);
+  const lamp = new THREE.SpotLight(0xbcd4ff, 0, 70, Math.PI / 3.2, 0.85, 1.3);
+  lamp.position.set(0, 10, 9);
+  lamp.target.position.set(0, 0, 0);
   scene.add(lamp);
   scene.add(lamp.target);
   const alertLight = new THREE.PointLight(0xef4444, 0, 18, 1.6);
@@ -666,8 +672,8 @@ export function mount(container, opts = {}) {
   scene.add(base);
   // outlet plate the power cords run up to
   const outletMat = mat(0xf3f4f5, { metalness: 0, roughness: 0.5 });
-  scene.add(box(0.55, 0.55, 0.04, outletMat, 3.6, 0.9, WALL_Z + 0.04));
-  scene.add(box(0.3, 0.12, 0.02, mat(0x4a5058, { metalness: 0 }), 3.6, 0.9, WALL_Z + 0.07));
+  scene.add(box(0.55, 0.55, 0.04, outletMat, 0, 0.9, WALL_Z + 0.04));
+  scene.add(box(0.3, 0.12, 0.02, mat(0x4a5058, { metalness: 0 }), 0, 0.9, WALL_Z + 0.07));
 
   // Everything physical lives in `tray`, turned so port edges face the viewer.
   const tray = new THREE.Group();
@@ -698,7 +704,6 @@ export function mount(container, opts = {}) {
   const entries = new Map();
   let layout = { slots: [], trayCount: 0, benchCount: 0, perRow: 1, rows: 1 };
   let layoutKey = "";
-  const switchLocal = new THREE.Vector3();
   let alert = "ok";
   let selected = null;
   let hovered = null;
@@ -715,76 +720,98 @@ export function mount(container, opts = {}) {
   const bgNight = NIGHT_BG.ok.clone();
   const tmpA = new THREE.Color();
 
-  // ---- furniture: tray, pegs, switch, power strip
+  // ---- furniture: tray, pegs, switch, power strip. Everything is mirrored
+  // about x = 0, so the room reads as one centred, balanced object.
+  const geo = { half: 3, laneMax: LANE0, swZ: 2.2, swW: 1.8, front: 2.9, back: -1.6 };
   function buildFurniture() {
     for (const c of [...furniture.children]) { furniture.remove(c); disposeTree(c); }
     for (const c of [...swGroup.children]) { swGroup.remove(c); disposeTree(c); }
     swLeds.length = 0;
 
     const n = layout.perRow;
-    const rowSpan = n * PITCH;
-    const left = -rowSpan / 2 - 0.55 - 2.3;       // room on the left for the switch
-    const right = rowSpan / 2 + 0.55;
-    const front = Math.max(1.2, 1.02 + 0.06 * n + 0.22);
+    const half = n * PITCH / 2 + TRAY_MARGIN;
+    const laneMax = LANE0 + LANE_STEP * Math.floor(n / 2);
+    const swW = Math.max(1.9, n * 0.2 + 0.8);
+    const swZ = laneMax + 0.62;
+    const front = swZ + 0.62;
+    const back = -1.7 - (layout.rows - 1) * ROW_GAP;
+    Object.assign(geo, { half, laneMax, swZ, swW, front, back });
     trayFront = front;
-    const back = -1.2 - (layout.rows - 1) * ROW_GAP;
-    const t = box(right - left, 0.05, front - back, traySurface, (left + right) / 2, 0.025, (front + back) / 2);
+
+    const t = box(2 * half, 0.05, front - back, traySurface, 0, 0.025, (front + back) / 2);
     t.receiveShadow = true;
     furniture.add(t);
     const rimMat = mat(0x2a2d33, { metalness: 0.2, roughness: 0.5 });
-    const W = right - left, D = front - back, cx = (left + right) / 2, cz = (front + back) / 2;
-    furniture.add(box(W, 0.035, 0.05, rimMat, cx, 0.065, front - 0.025), box(W, 0.035, 0.05, rimMat, cx, 0.065, back + 0.025),
-      box(0.05, 0.035, D, rimMat, left + 0.025, 0.065, cz), box(0.05, 0.035, D, rimMat, right - 0.025, 0.065, cz));
+    const D = front - back, cz = (front + back) / 2;
+    furniture.add(box(2 * half, 0.04, 0.06, rimMat, 0, 0.07, front - 0.03), box(2 * half, 0.04, 0.06, rimMat, 0, 0.07, back + 0.03),
+      box(0.06, 0.04, D, rimMat, -half + 0.03, 0.07, cz), box(0.06, 0.04, D, rimMat, half - 0.03, 0.07, cz));
 
     // the black pegs between laptops, front and back
     for (let r = 0; r < layout.rows; r++) {
       const inRow = Math.min(layout.perRow, layout.trayCount - r * layout.perRow);
       for (let i = 0; i <= inRow; i++) {
-        const px = (i - 0.5 - (layout.perRow - 1) / 2) * PITCH;
-        for (const [pz, ph] of [[0.5, 0.62], [-0.38, 0.5]]) {
-          const p = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.04, ph, 10), peg);
+        const px = (i - inRow / 2) * PITCH;
+        for (const [pz, ph] of [[0.7, 0.85], [-0.55, 0.7]]) {
+          const p = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, ph, 12), peg);
           p.position.set(px, 0.05 + ph / 2, pz - r * ROW_GAP);
           furniture.add(p);
         }
       }
     }
 
-    // the switch, at the left end of the tray
-    switchLocal.set(left + 1.35, 0.05, 0.55);
-    swGroup.position.copy(switchLocal);
-    swGroup.add(box(2.0, 0.16, 0.5, mat(0x1a1d22, { metalness: 0.5, roughness: 0.45 }), 0, 0.08, 0));
-    for (let i = 0; i < 13; i++) {
+    // the switch, centred in front of the row: status LEDs face the viewer,
+    // the cables plug in at the back
+    swGroup.position.set(0, 0.05, swZ);
+    swGroup.add(box(swW, 0.24, 0.62, mat(0x1a1d22, { metalness: 0.5, roughness: 0.45 }), 0, 0.12, 0));
+    const pp = portPitch(n, swW);
+    for (let k = 0; k < n; k++) {
+      const x = (k - (n - 1) / 2) * pp;
       const m = led(BAR_GOOD);
-      const l = new THREE.Mesh(new THREE.CircleGeometry(0.02, 8), m);
-      l.position.set((i - 6) * 0.13, 0.118, 0.252);
+      const l = new THREE.Mesh(new THREE.CircleGeometry(0.026, 10), m);
+      l.position.set(x, 0.15, 0.312);
       swGroup.add(l);
       swLeds.push(m);
-      swGroup.add(box(0.075, 0.05, 0.012, mat(0x050607), (i - 6) * 0.13, 0.058, 0.252));
+      swGroup.add(box(Math.min(0.12, pp * 0.7), 0.06, 0.012, mat(0x050607), x, 0.075, 0.312));
     }
 
-    // power strip and cords behind the row
-    const stripX = right - 0.6;
-    furniture.add(box(0.9, 0.09, 0.32, mat(0xeceef0, { metalness: 0, roughness: 0.5 }), stripX, 0.095, back + 0.35));
+    // wall shelves for the devices that are not laptop-shaped: one plank per
+    // shelf, centred, on two brackets each
+    const plank = mat(0x2a2d33, { metalness: 0.2, roughness: 0.55 });
+    for (let sh = 0; sh < (layout.shelves || 0); sh++) {
+      const inShelf = Math.min(PER_SHELF, layout.benchCount - sh * PER_SHELF);
+      const w = (inShelf - 1) * SHELF_PITCH + 3.6;
+      const y = SHELF_Y + sh * SHELF_GAP;
+      furniture.add(box(w, 0.1, 2.1, plank, 0, y - 0.05, SHELF_Z));
+      for (const sx of [-1, 1]) {
+        furniture.add(box(0.1, 0.7, 0.05, plank, sx * (w / 2 - 0.4), y - 0.45, WALL_Z + 0.06));
+        furniture.add(box(0.1, 0.05, 1.5, plank, sx * (w / 2 - 0.4), y - 0.12, WALL_Z + 0.75));
+      }
+    }
+
+    // power strip and cords: centred behind the row, running up to the outlet
+    furniture.add(box(1.1, 0.1, 0.36, mat(0xeceef0, { metalness: 0, roughness: 0.5 }), 0, 0.1, back + 0.45));
     const cordMat = new THREE.MeshStandardMaterial({ color: 0xf1f2f3, roughness: 0.6 });
-    for (let k = 0; k < 3; k++) {
+    for (const sgn of [-1, 1]) {
       const pts = [
-        new THREE.Vector3(stripX + 0.4, 0.1, back + 0.35 - k * 0.04),
-        new THREE.Vector3(stripX + 0.9 + k * 0.2, 0.06, back - 0.2),
-        new THREE.Vector3(stripX + 1.3 + k * 0.1, 0.07, back - 0.9 - k * 0.1),
-        new THREE.Vector3(stripX + 1.2, 0.4 + k * 0.25, back - 1.6),
+        new THREE.Vector3(sgn * 0.45, 0.1, back + 0.45),
+        new THREE.Vector3(sgn * 0.7, 0.06, back - 0.2),
+        new THREE.Vector3(sgn * 0.45, 0.07, back - 1.0),
+        new THREE.Vector3(sgn * 0.16, 0.5, WALL_Z + 0.2 - tray.position.z),
+        new THREE.Vector3(sgn * 0.1, 0.9, WALL_Z + 0.1 - tray.position.z),
       ];
-      furniture.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 30, 0.028, 6, false), cordMat));
+      furniture.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 30, 0.03, 6, false), cordMat));
     }
     furniture.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     swGroup.traverse(o => { if (o.isMesh) o.castShadow = true; });
   }
+  function portPitch(n, swW) { return Math.min(0.24, (swW - 0.6) / Math.max(1, n - 1)); }
 
   // ---- node entries
   function createEntry(name) {
     const root = new THREE.Group();
     const e = {
       name, root, kind: null, model: null, cur: null, target: null,
-      podInfo: null, glow: null, tag: makeTag(0.32), cable: null, pulses: [],
+      podInfo: null, glow: null, tag: makeTag(0.4), cable: null, pulses: [],
       lift: 0, bob: Math.random() * 6, slot: null, curve: null, builtFor: null, cableDirty: false,
     };
     root.add(e.tag);
@@ -800,49 +827,53 @@ export function mount(container, opts = {}) {
     e.kind = kind;
     e.builtFor = idx;
     e.model = BUILDERS[kind](e.slot);
+    if (kind !== "laptop" && kind !== "generic") e.model.group.scale.setScalar(DEVICE_SCALE);
     e.model.group.traverse(o => { o.userData.entry = e; if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     e.root.add(e.model.group);
     return true;
   }
 
-  // One lane per cable, nested so none cross: a cable leaves its jack,
-  // drops to its own lane in front of the tray, runs left along that lane,
-  // then turns in to its switch port. Laptops further right take outer
-  // lanes and the switch ports in reverse order, which is what keeps the
-  // runs from crossing.
+  // One lane per cable, mirrored about the centre line so none cross. A
+  // cable leaves its jack, drops to its lane in front of the tray, runs
+  // toward the middle, then turns up to the back of the centred switch.
+  // Laptops further from the middle take outer lanes and outer ports, which
+  // is exactly what keeps the runs from crossing.
   function buildCable(e) {
     if (e.cable) { tray.remove(e.cable); disposeTree(e.cable); }
     e.cable = null; e.curve = null; e.pulses = [];
     if (!e.model || !e.model.jack) return;
     const n = Math.max(1, layout.perRow);
     const col = e.slot.index % layout.perRow;
+    const u = col - (n - 1) / 2;                   // signed distance from the middle
     const x = e.root.position.x, z0 = e.root.position.z;
     const j = e.model.jack;
     const y0 = 0.05 + j.y, zj = z0 + j.z;
-    const laneZ = z0 + 1.02 + 0.06 * col;
-    const portX = switchLocal.x + (6 - Math.floor((n - 1) / 2) + (n - 1 - col) - 6) * 0.13;
-    const swFront = switchLocal.z + 0.25;
-    const r = 0.1;                              // corner rounding
+    const laneZ = z0 + LANE0 + LANE_STEP * Math.abs(u);
+    const portX = u * portPitch(n, geo.swW);
+    const swBack = geo.swZ - 0.31 - z0;
+    const dir = Math.sign(portX - x) || 1;         // toward the middle
+    const r = 0.12;                                // corner rounding
     const pts = [
       new THREE.Vector3(x, y0, zj),
-      new THREE.Vector3(x, y0 - 0.02, zj + 0.08),
-      new THREE.Vector3(x, 0.2, laneZ - 0.12),
-      new THREE.Vector3(x, 0.085, laneZ - r * 0.4),
-      new THREE.Vector3(x - r, 0.075, laneZ),
-      new THREE.Vector3(portX + r, 0.075, laneZ),
-      new THREE.Vector3(portX, 0.085, laneZ - r),
-      new THREE.Vector3(portX, 0.1, swFront + 0.1),
-      new THREE.Vector3(portX, 0.1, swFront),
+      new THREE.Vector3(x, y0 - 0.03, zj + 0.1),
+      new THREE.Vector3(x, 0.22, laneZ - 0.16),
+      new THREE.Vector3(x, 0.09, laneZ - r * 0.45),
+      new THREE.Vector3(x + dir * r, 0.075, laneZ),
+      new THREE.Vector3(portX - dir * r, 0.075, laneZ),
+      new THREE.Vector3(portX, 0.085, laneZ + r),
+      new THREE.Vector3(portX, 0.14, swBack - 0.1),
+      new THREE.Vector3(portX, 0.16, swBack),
     ];
+    if (Math.abs(portX - x) < 2 * r) { pts.splice(4, 2, new THREE.Vector3((x + portX) / 2, 0.075, laneZ)); }
     e.curve = new THREE.CatmullRomCurve3(pts, false, "centripetal");
     const tube = new THREE.Mesh(
-      new THREE.TubeGeometry(e.curve, 90, 0.019, 8, false),
+      new THREE.TubeGeometry(e.curve, 110, 0.024, 8, false),
       new THREE.MeshStandardMaterial({ color: 0xf2f3f4, roughness: 0.5, metalness: 0 }));
     tube.castShadow = true;
     const g = new THREE.Group();
     g.add(tube);
     for (let i = 0; i < 2; i++) {
-      const p = new THREE.Mesh(new THREE.SphereGeometry(0.026, 8, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x38bdf8).multiplyScalar(HOT) }));
+      const p = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0x38bdf8).multiplyScalar(HOT) }));
       p.userData.phase = i / 2;
       p.visible = motion;
       g.add(p);
@@ -896,7 +927,7 @@ export function mount(container, opts = {}) {
     const nodes = (snap && snap.nodes) || [];
     layout = layoutRoom(nodes);
     const byName = new Map(nodes.map(n => [n.name, n]));
-    const key = `${layout.trayCount}:${layout.benchCount}:${layout.perRow}:${layout.rows}`;
+    const key = `${layout.trayCount}:${layout.benchCount}:${layout.perRow}:${layout.rows}:${layout.shelves}`;
     if (key !== layoutKey) { layoutKey = key; buildFurniture(); for (const e of entries.values()) e.cableDirty = true; frameCamera(); }
     emptyTag.visible = nodes.length === 0;
 
@@ -912,11 +943,11 @@ export function mount(container, opts = {}) {
       const oldX = e.root.position.x, oldZ = e.root.position.z;
       e.slot = slot;
       const rebuilt = setKind(e, modelFor(n.deviceClass));
-      e.root.position.set(slot.x, slot.bench ? 0 : 0.05, slot.z);
+      e.root.position.set(slot.x, slot.y, slot.z);
       // name plate lying on the tray's front rim (or the floor in front of a
       // bench device), tilted back toward the viewer
       e.tag.rotation.x = -1.05;
-      e.tag.position.set(0, slot.bench ? 0.05 : 0.07 - 0.0, (slot.bench ? 1.2 : trayFront - slot.z + 0.1));
+      e.tag.position.set(0, slot.bench ? -0.035 : -0.035, (slot.bench ? 1.15 : trayFront - slot.z + 0.22));
       if (isNew || rebuilt || e.cableDirty || oldIndex !== slot.index || oldX !== slot.x || oldZ !== slot.z) {
         buildCable(e);
         e.cableDirty = false;
@@ -943,12 +974,15 @@ export function mount(container, opts = {}) {
   let flyIn = motion ? { t0: null, dur: 1.8 } : null;
   function flyStart(out) { return out.set(home.pos.x * 1.6, home.pos.y + 9, home.pos.z * 1.7); }
   function frameCamera() {
-    const span = Math.max(3, layout.perRow * PITCH + 3.2) + (layout.rows - 1) * ROW_GAP;
-    const d = 2.6 + span * 0.66 + (layout.benchCount ? 1.8 : 0);
-    // centre of the tray (the switch end included), looked at nearly head-on
-    home.target.set(-1.15, 0.55, layout.benchCount ? -0.6 : 0.1);
-    home.pos.set(home.target.x + d * 0.05, 1.0 + d * 0.42, home.target.z + d * 0.9);
-    controls.maxDistance = Math.max(10, d * 1.9);
+    // look at the middle of the room from straight ahead, close enough that
+    // the models read, far enough to take in the tray and any wall shelves
+    const halfW = Math.max(layout.reach || 0, layout.half || 3) + 0.4;
+    const depth = (layout.rows - 1) * ROW_GAP;
+    const top = layout.shelves ? SHELF_Y + (layout.shelves - 1) * SHELF_GAP + 1.5 : 2.0;
+    const d = Math.max(7.5, halfW * 1.15 + 2.0 + depth * 0.4, top * 2.1);
+    home.target.set(0, Math.max(0.8, top * 0.4), 0.35 - depth * 0.3);
+    home.pos.set(0, 1.5 + d * 0.36, home.target.z + d * 0.92);
+    controls.maxDistance = Math.max(14, d * 1.9);
     if (!flyIn && !anim && !selected) { camera.position.copy(home.pos); controls.target.copy(home.target); }
   }
 
@@ -964,8 +998,8 @@ export function mount(container, opts = {}) {
     if (e) {
       e.root.getWorldPosition(_w);
       const dir = new THREE.Vector3(Math.sin(YAW), 0, Math.cos(YAW));
-      const far = e.slot && e.slot.bench ? 4.6 : 3.4;
-      glide(_w.clone().addScaledVector(dir, far).add(new THREE.Vector3(0, 1.5, 0)), _w.clone().add(new THREE.Vector3(0, 0.5, 0)));
+      const far = e.slot && e.slot.bench ? 6.2 : 5.2;
+      glide(_w.clone().addScaledVector(dir, far).add(new THREE.Vector3(0, 1.8, 0)), _w.clone().add(new THREE.Vector3(0, 0.8, 0)));
     } else {
       glide(home.pos, home.target);
     }
@@ -1163,10 +1197,10 @@ export function mount(container, opts = {}) {
     alertCol.lerp(ALERT_TINT[alert], Math.min(1, dt * 3));
     bgNight.lerp(NIGHT_BG[alert], Math.min(1, dt * 2));
     sun.intensity = lerp(2.6, 0, night);
-    hemi.intensity = lerp(1.1, 0.22, night);
+    hemi.intensity = lerp(1.1, 0.55, night);
     hemi.color.setHex(0xdfe9f5).lerp(tmpA.setHex(0x2a3f5c), night);
     hemi.groundColor.setHex(0xb8a58f).lerp(tmpA.setHex(0x0a0d12), night);
-    lamp.intensity = lerp(0, 70, night);
+    lamp.intensity = lerp(0, 250, night);
     alertLight.color.setHex(alert === "bad" ? 0xef4444 : 0xf59e0b);
     alertLight.intensity = alertMix * lerp(6, 55, night) * (motion ? 0.85 + 0.15 * Math.sin(t * 4) : 1);
     wallMat.color.copy(WALL_DAY).lerp(WALL_NIGHT, night).lerp(alertCol, 0.1 * alertMix * (1 - night));
@@ -1186,6 +1220,7 @@ export function mount(container, opts = {}) {
       c.ready = tg.ready;
       c.charging = tg.charging;
       e.model.update(c, t, dt, motion);
+      if (e.cable) e.cable.children[0].material.color.setHex(0xf2f3f4).lerp(CABLE_NIGHT, night);
 
       const targetLift = e === hovered || e.name === selected ? 0.07 : 0;
       e.lift += (targetLift - e.lift) * k;

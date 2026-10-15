@@ -67,30 +67,46 @@ export function roomAlert(snapshot) {
 // one black tray (twelve to a row, extra rows behind), and anything that is
 // not laptop-shaped sits on the floor behind it. Deterministic and
 // independent of input order: control plane first, then by name.
-export const PITCH = 0.42;       // distance between neighbouring laptops
+export const PITCH = 0.58;       // distance between neighbouring laptops
 export const ROW_LENGTH = 12;    // laptops per tray row
-export const ROW_GAP = 1.9;      // distance between tray rows
-export const BENCH_PITCH = 2.3;  // distance between non-laptop devices
-export const BENCH_Z = -2.6;
+export const ROW_GAP = 3.6;      // distance between tray rows
+export const SHELF_PITCH = 3.6;  // distance between devices on the wall shelf
+export const PER_SHELF = 5;      // devices per shelf
+export const SHELF_Y = 2.5;      // height of the lowest shelf
+export const SHELF_GAP = 2.2;    // distance between shelves
+export const SHELF_Z = -3.9;     // shelves hang on the back wall
+export const TRAY_MARGIN = 0.7;  // tray overhang past the first/last laptop
 
 export function inTray(deviceClass) {
   const m = modelFor(deviceClass);
   return m === "laptop" || m === "generic";
 }
 
+// Everything is mirrored about x = 0. Laptops stand in one centred tray;
+// anything not laptop-shaped sits on a wall shelf above it, centred, with
+// further shelves stacked upward. Deterministic and independent of input
+// order: control plane first, then by name.
 export function layoutRoom(nodes) {
   const sorted = [...(nodes || [])].sort((a, b) =>
     (b.controlPlane === true) - (a.controlPlane === true) || String(a.name).localeCompare(String(b.name)));
   const tray = sorted.filter(n => inTray(n.deviceClass));
   const bench = sorted.filter(n => !inTray(n.deviceClass));
   const perRow = Math.min(ROW_LENGTH, Math.max(1, tray.length));
+  const half = perRow * PITCH / 2 + TRAY_MARGIN;
   const slots = [];
   tray.forEach((n, i) => {
     const row = Math.floor(i / ROW_LENGTH), col = i % ROW_LENGTH;
-    slots.push({ name: n.name, bench: false, index: i, row, x: (col - (perRow - 1) / 2) * PITCH, z: -row * ROW_GAP });
+    slots.push({ name: n.name, bench: false, index: i, row, x: (col - (perRow - 1) / 2) * PITCH, y: 0.05, z: -row * ROW_GAP });
   });
+  const shelves = Math.ceil(bench.length / PER_SHELF);
   bench.forEach((n, j) => {
-    slots.push({ name: n.name, bench: true, index: tray.length + j, row: 0, x: (j - (bench.length - 1) / 2) * BENCH_PITCH, z: BENCH_Z });
+    const shelf = Math.floor(j / PER_SHELF), col = j % PER_SHELF;
+    const inShelf = Math.min(PER_SHELF, bench.length - shelf * PER_SHELF);
+    slots.push({ name: n.name, bench: true, index: tray.length + j, row: 0, shelf, x: (col - (inShelf - 1) / 2) * SHELF_PITCH, y: SHELF_Y + shelf * SHELF_GAP, z: SHELF_Z });
   });
-  return { slots, trayCount: tray.length, benchCount: bench.length, perRow, rows: Math.max(1, Math.ceil(tray.length / ROW_LENGTH)) };
+  const shelfHalf = bench.length ? (Math.min(PER_SHELF, bench.length) - 1) / 2 * SHELF_PITCH + 1.9 : 0;
+  return {
+    slots, trayCount: tray.length, benchCount: bench.length, perRow, shelves,
+    rows: Math.max(1, Math.ceil(tray.length / ROW_LENGTH)), half, reach: Math.max(half, shelfHalf),
+  };
 }

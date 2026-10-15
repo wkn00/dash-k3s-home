@@ -93,6 +93,26 @@ test("layoutRoom puts non-laptops on the bench and starts a second tray row afte
   assert.equal(r.slots.find(s => s.name === "l12").row, 1);
 });
 
+test("layoutRoom is mirror-symmetric: tray centred, other devices centred on a wall shelf", () => {
+  const nodes = [{ name: "a", deviceClass: "laptop" }, { name: "b", deviceClass: "laptop" }, { name: "c", deviceClass: "laptop" },
+    { name: "s1", deviceClass: "server" }, { name: "s2", deviceClass: "sbc" }, { name: "s3", deviceClass: "vm" }];
+  const r = layoutRoom(nodes);
+  const tray = r.slots.filter(s => !s.bench), bench = r.slots.filter(s => s.bench);
+  assert.ok(Math.abs(tray.reduce((a, s) => a + s.x, 0)) < 1e-9, "tray centred on x = 0");
+  assert.ok(Math.abs(bench.reduce((a, s) => a + s.x, 0)) < 1e-9, "shelf devices centred on x = 0");
+  assert.ok(bench.every(s => s.y > tray[0].y), "shelf devices sit above the tray");
+  assert.ok(r.reach >= Math.max(...bench.map(s => Math.abs(s.x))));
+});
+
+test("layoutRoom: a single shelf device sits dead centre; a sixth starts a second shelf", () => {
+  const one = layoutRoom([{ name: "x", deviceClass: "server" }]);
+  assert.equal(one.slots[0].x, 0);
+  const six = layoutRoom(Array.from({ length: 6 }, (_, i) => ({ name: "d" + i, deviceClass: "server" })));
+  assert.equal(six.shelves, 2);
+  assert.ok(six.slots[5].y > six.slots[0].y);
+  assert.equal(six.slots[5].x, 0);
+});
+
 test("layoutRoom with no nodes", () => {
   assert.deepEqual(layoutRoom([]).slots, []);
   assert.deepEqual(layoutRoom(undefined).slots, []);
