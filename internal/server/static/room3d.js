@@ -22,8 +22,6 @@ import {
   PITCH, ROW_GAP,
 } from "./room3d-logic.js?v=13";
 
-const POD_ROW = 16;           // pods drawn per node, in one row
-const MAX_PODS_SHOWN = POD_ROW; // the label says how many more
 const YAW = 0.5;              // the tray is turned so the port edges face the viewer
 const WALL_Z = -3.9;
 
@@ -49,11 +47,6 @@ const BAR_NODATA = new THREE.Color(0x4a5360);
 const PLUGS = [0xf2f2f2, 0x2563eb, 0xfacc15, 0x2563eb, 0x2563eb, 0xf2f2f2, 0x2563eb];
 
 // Shared, never disposed per node.
-const podGeo = new THREE.BoxGeometry(0.06, 0.06, 0.06);
-const podOk = new THREE.MeshStandardMaterial({ color: 0x16a34a, emissive: 0x16a34a, emissiveIntensity: 0.9, roughness: 0.4 });
-const podBad = new THREE.MeshStandardMaterial({ color: 0xdc2626, emissive: 0xef4444, emissiveIntensity: 1.2, roughness: 0.4 });
-for (const o of [podGeo, podOk, podBad]) o.userData.shared = true;
-
 const ease = (cur, target, k) => (target == null ? null : cur == null ? target : cur + (target - cur) * k);
 const lerp = (a, b, t) => a + (b - a) * t;
 const barColor = v => (v < 0.6 ? BAR_GOOD : v < 0.85 ? BAR_WARN : BAR_BAD);
@@ -219,24 +212,24 @@ function buildLaptop(slot) {
   }
   group.add(box(0.08, 0.012, 0.16, body(0xb91c1c, { metalness: 0.1, roughness: 0.4 }), 0.0, H + 0.066, 0.52));
 
-  // bottom case (+x): a service door with screws, and the exhaust vents
+  // bottom case (+x): the exhaust vents and a service door
   const faceX = bx + bottomT / 2 + 0.012;
-  group.add(box(0.006, 0.46, 0.62, body(0x25272c, { roughness: 0.7 }), faceX, 0.34, 0.12));
-  for (const [dz, dy] of [[-0.27, -0.2], [0.27, -0.2], [-0.27, 0.2], [0.27, 0.2]]) {
-    const sc = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.006, 10), body(0x6c7078, { metalness: 0.8 }));
+  group.add(box(0.006, 0.34, 0.62, body(0x25272c, { roughness: 0.7 }), faceX, 0.2, 0.3));
+  for (const [dz, dy] of [[-0.27, -0.13], [0.27, -0.13], [-0.27, 0.13], [0.27, 0.13]]) {
+    const sc = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.006, 10), body(0x6c7078, { metalness: 0.8 }));
     sc.rotation.z = Math.PI / 2;
-    sc.position.set(faceX + 0.004, 0.34 + dy, 0.12 + dz);
+    sc.position.set(faceX + 0.004, 0.2 + dy, 0.3 + dz);
     group.add(sc);
   }
   const ventMats = [];
   for (let i = 0; i < 7; i++) {
     const m = new THREE.MeshBasicMaterial({ color: 0x050607 });
-    group.add(box(0.005, 0.15, 0.02, m, faceX, 0.76, -0.5 + i * 0.045));
+    group.add(box(0.005, 0.1, 0.02, m, faceX, 0.52, -0.55 + i * 0.045));
     ventMats.push(m);
   }
   const power = new THREE.Mesh(new THREE.CircleGeometry(0.011, 10), led(BAR_GOOD));
   power.rotation.y = Math.PI / 2;
-  power.position.set(faceX + 0.004, H - 0.07, -0.63);
+  power.position.set(faceX + 0.004, 0.52, 0.5);
   group.add(power);
 
   // port edge (+z): VGA, Ethernet, USB x2, HDMI, each in a recessed bezel
@@ -268,6 +261,7 @@ function buildLaptop(slot) {
   return {
     group,
     jack: new THREE.Vector3(0, 0.62 * 1.2, (portZ + 0.115) * 1.2),
+    glow: { w: 0.55, d: 2.0 },
     update(ind, t, dt, motion) {
       const dead = !ind.ready;
       darken(group, dead);
@@ -490,6 +484,21 @@ function trayTexture() {
   }, [6, 3]);
 }
 
+// A soft round falloff, so a glow on the floor has no hard edge.
+let _glowTex = null;
+function glowTexture() {
+  if (_glowTex) return _glowTex;
+  _glowTex = canvasTex(128, 128, (x, w, h) => {
+    const g = x.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    g.addColorStop(0, "rgba(255,255,255,1)");
+    g.addColorStop(0.45, "rgba(255,255,255,0.45)");
+    g.addColorStop(1, "rgba(255,255,255,0)");
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+  });
+  _glowTex.userData = { shared: true };
+  return _glowTex;
+}
+
 // ---- helpers -------------------------------------------------------------
 
 function disposeTree(root) {
@@ -498,27 +507,48 @@ function disposeTree(root) {
     const ms = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
     for (const m of ms) {
       if (m.userData && m.userData.shared) continue;
-      if (m.map) m.map.dispose();
+      if (m.map && !(m.map.userData && m.map.userData.shared)) m.map.dispose();
       m.dispose();
     }
   });
 }
 
-function nameTag(text, scale = 1) {
+// A name tag that also carries the node's pod summary: a health dot, the
+// name, and "N pods" (or NOT READY), redrawn only when one of those changes.
+function makeTag(scale = 1) {
   const c = document.createElement("canvas");
-  c.width = 512; c.height = 96;
-  const x = c.getContext("2d");
-  x.fillStyle = "rgba(8,14,22,0.78)";
-  x.beginPath(); x.roundRect(4, 4, 504, 88, 18); x.fill();
-  x.fillStyle = "#e6edf5";
-  x.font = "600 44px system-ui, sans-serif";
-  x.textAlign = "center"; x.textBaseline = "middle";
-  x.fillText(text, 256, 50, 480);
+  c.width = 512; c.height = 128;
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false }));
-  s.scale.set(1.3 * scale, 0.244 * scale, 1);
+  s.scale.set(1.3 * scale, 0.325 * scale, 1);
+  s.userData.canvas = c;
+  s.userData.key = "";
   return s;
+}
+
+function drawTag(tag, name, summary) {
+  const key = name + "|" + (summary ? summary.text + summary.state : "");
+  if (tag.userData.key === key) return;
+  tag.userData.key = key;
+  const c = tag.userData.canvas, x = c.getContext("2d");
+  x.clearRect(0, 0, c.width, c.height);
+  x.fillStyle = "rgba(10,16,24,0.82)";
+  x.beginPath(); x.roundRect(4, 4, 504, 120, 28); x.fill();
+  const dot = !summary ? "#64748b" : summary.state === "bad" ? "#ef4444" : summary.state === "warn" ? "#f59e0b" : "#22c55e";
+  x.fillStyle = dot;
+  x.beginPath(); x.arc(46, 64, 16, 0, Math.PI * 2); x.fill();
+  x.fillStyle = "#e6edf5";
+  x.font = "700 54px system-ui, sans-serif";
+  x.textAlign = "left"; x.textBaseline = "middle";
+  x.fillText(name, 78, 66, summary ? 200 : 420);
+  if (summary) {
+    x.fillStyle = summary.state === "bad" ? "#fca5a5" : "#9fb3c8";
+    x.font = "500 36px system-ui, sans-serif";
+    x.textAlign = "right";
+    x.fillText(summary.text, 490, 68, 200);
+  }
+  tag.material.map.needsUpdate = true;
 }
 
 const pct = v => (v == null ? "—" : Math.round(v * 100) + "%");
@@ -620,7 +650,8 @@ export function mount(container, opts = {}) {
   const swGroup = new THREE.Group();
   tray.add(swGroup);
   const swLeds = [];
-  const emptyTag = nameTag("No nodes reported");
+  const emptyTag = makeTag(1);
+  drawTag(emptyTag, "No nodes reported", null);
   emptyTag.position.set(0, 1.2, 0);
   emptyTag.visible = false;
   tray.add(emptyTag);
@@ -720,11 +751,10 @@ export function mount(container, opts = {}) {
   function createEntry(name) {
     const root = new THREE.Group();
     const e = {
-      name, root, kind: null, model: null, cur: null, target: null, pods: new THREE.Group(),
-      podKey: "", podInfo: null, tag: nameTag(name, 0.3), cable: null, pulses: [], beacon: null,
+      name, root, kind: null, model: null, cur: null, target: null,
+      podInfo: null, glow: null, tag: makeTag(0.36), cable: null, pulses: [],
       lift: 0, bob: Math.random() * 6, slot: null, curve: null, builtFor: null, cableDirty: false,
     };
-    root.add(e.pods);
     root.add(e.tag);
     root.userData.entry = e;
     tray.add(root);
@@ -794,43 +824,38 @@ export function mount(container, opts = {}) {
     tray.remove(e.root);
     disposeTree(e.root);
     if (e.cable) { tray.remove(e.cable); disposeTree(e.cable); }
-    if (e.beacon) { tray.remove(e.beacon); disposeTree(e.beacon); }
+    if (e.glow) { e.root.remove(e.glow); disposeTree(e.glow); }
     if (selected === e.name) select(null, true);
     if (hovered === e) { hovered = null; label.style.display = "none"; }
   }
 
-  function podPos(e, i) {
-    if (e.kind === "laptop" || e.kind === "generic") return [0, 1.5, (i - (POD_ROW - 1) / 2) * 0.1];
-    return [(i - (POD_ROW - 1) / 2) * 0.1, 1.2, 0];
-  }
-
+  // Pods are summarised on the name tag and listed in the hover label; the
+  // scene itself stays free of floating markers.
   function syncPods(e, info) {
-    const list = info ? info.pods : [];
-    const shown = list.slice(0, MAX_PODS_SHOWN);
-    const key = e.kind + shown.map(p => (p.healthy ? "1" : "0")).join("") + ":" + list.length;
     e.podInfo = info || { total: 0, unhealthy: 0, pods: [] };
-    if (key === e.podKey) return;
-    e.podKey = key;
-    for (const c of [...e.pods.children]) e.pods.remove(c);
-    shown.forEach((p, i) => {
-      const m = new THREE.Mesh(podGeo, p.healthy ? podOk : podBad);
-      m.userData.entry = e;
-      m.userData.pod = p;
-      m.position.set(...podPos(e, i));
-      e.pods.add(m);
+    const down = e.target && !e.target.ready;
+    const unhealthy = e.podInfo.unhealthy;
+    drawTag(e.tag, e.name, {
+      text: down ? "DOWN" : e.podInfo.total + (e.podInfo.total === 1 ? " pod" : " pods"),
+      state: down || unhealthy > 0 && unhealthy * 4 >= e.podInfo.total ? "bad" : unhealthy > 0 ? "warn" : "ok",
     });
   }
 
-  function syncBeacon(e, bad) {
-    if (bad && !e.beacon) {
-      const g = new THREE.Group();
-      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.14, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xef4444).multiplyScalar(2.4) }));
-      cone.rotation.x = Math.PI;
-      g.add(cone);
-      e.beacon = g;
-      tray.add(g);
-    } else if (!bad && e.beacon) {
-      tray.remove(e.beacon); disposeTree(e.beacon); e.beacon = null;
+  // A node with a problem (down, or running unhealthy pods) gets a pulsing
+  // red glow on the floor under it: visible from across the room, and part
+  // of the scene rather than something hovering in it.
+  function syncAlert(e, bad) {
+    if (bad && !e.glow) {
+      const sz = e.model && e.model.glow ? e.model.glow : { w: 1.8, d: 1.8 };
+      const g = new THREE.Mesh(new THREE.PlaneGeometry(sz.w * 1.7, sz.d * 1.25), new THREE.MeshBasicMaterial({
+        color: 0xef4444, map: glowTexture(), transparent: true, opacity: 0.0, blending: THREE.AdditiveBlending, depthWrite: false,
+      }));
+      g.rotation.x = -Math.PI / 2;
+      g.position.y = 0.012;
+      e.glow = g;
+      e.root.add(g);
+    } else if (!bad && e.glow) {
+      e.root.remove(e.glow); disposeTree(e.glow); e.glow = null;
     }
   }
 
@@ -855,8 +880,8 @@ export function mount(container, opts = {}) {
       const oldX = e.root.position.x, oldZ = e.root.position.z;
       e.slot = slot;
       const rebuilt = setKind(e, modelFor(n.deviceClass));
-      e.root.position.set(slot.x, 0.05, slot.z);
-      e.tag.position.set(0, slot.bench ? 1.75 : 1.78, 0);
+      e.root.position.set(slot.x, slot.bench ? 0 : 0.05, slot.z);
+      e.tag.position.set(0, slot.bench ? 1.55 : 1.62, 0);
       if (isNew || rebuilt || e.cableDirty || oldIndex !== slot.index || oldX !== slot.x || oldZ !== slot.z) {
         buildCable(e);
         e.cableDirty = false;
@@ -865,7 +890,7 @@ export function mount(container, opts = {}) {
       e.info = n;
       if (isNew) e.cur = { ...e.target };
       syncPods(e, pods.get(slot.name));
-      syncBeacon(e, !e.target.ready || (e.podInfo && e.podInfo.unhealthy > 0));
+      syncAlert(e, !e.target.ready || (e.podInfo && e.podInfo.unhealthy > 0));
     }
     for (const [name, e] of [...entries]) {
       if (!seen.has(name)) { removeEntry(e); entries.delete(name); }
@@ -910,10 +935,9 @@ export function mount(container, opts = {}) {
   function showLabel(e) {
     const ind = e.target || {};
     const pi = e.podInfo || { total: 0, unhealthy: 0 };
-    const more = pi.total > MAX_PODS_SHOWN ? ` (+${pi.total - MAX_PODS_SHOWN} not shown)` : "";
     label.textContent = `${e.name}${ind.ready === false ? "  · NOT READY" : ""}\n` +
       `CPU ${pct(ind.cpu)}   MEM ${pct(ind.mem)}   DISK ${pct(ind.disk)}\n` +
-      `${pi.total} pods${pi.unhealthy ? `, ${pi.unhealthy} unhealthy` : ""}${more}`;
+      `${pi.total} pods${pi.unhealthy ? `, ${pi.unhealthy} unhealthy` : ""}`;
     label.style.display = "block";
   }
 
@@ -1055,13 +1079,8 @@ export function mount(container, opts = {}) {
       const targetLift = e === hovered || e.name === selected ? 0.07 : 0;
       e.lift += (targetLift - e.lift) * k;
       e.model.group.position.y = e.lift;
-      e.pods.position.y = motion ? Math.sin(t * 1.4 + e.bob) * 0.025 : 0;
 
-      if (e.beacon) {
-        e.beacon.position.set(e.root.position.x, 2.12, e.root.position.z);
-        if (motion) e.beacon.rotation.y += dt * 3;
-        e.beacon.visible = motion ? Math.sin(t * 6) > -0.3 : true;
-      }
+      if (e.glow) e.glow.material.opacity = motion ? 0.28 + 0.22 * Math.sin(t * 3.2) : 0.4;
       if (motion && e.curve) {
         const speed = 0.1 + (c.cpu == null ? 0 : c.cpu) * 0.6;
         for (const p of e.pulses) {
@@ -1071,7 +1090,6 @@ export function mount(container, opts = {}) {
         }
       }
     }
-    podBad.emissiveIntensity = motion ? 0.9 + 0.7 * Math.sin(t * 5) : 1.2;
     swLeds.forEach((m, i) => {
       const on = motion ? Math.sin(t * 7 + i * 1.7) > -0.2 : true;
       m.color.copy(BAR_GOOD).multiplyScalar(on ? 1 : 0.15);
