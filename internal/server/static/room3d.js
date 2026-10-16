@@ -20,7 +20,7 @@ import { Reflector } from "three/addons/objects/Reflector.js";
 import {
   modelFor, nodeIndicators, podsByNode, roomAlert, layoutRoom,
   PITCH, ROW_GAP, TRAY_MARGIN, SHELF_Y, SHELF_GAP, SHELF_Z, SHELF_PITCH, PER_SHELF,
-} from "./room3d-logic.js?v=14";
+} from "./room3d-logic.js?v=15";
 
 const YAW = 0;                // square to the wall
 const WALL_Z = -5.2;
@@ -200,6 +200,25 @@ function grainTexture() {
   return _grain;
 }
 
+// Logos for the back of a ThinkPad lid (see buildLaptop): transparent, so the
+// grained cover shows through. 1 canvas pixel = 1/1000 of a model unit.
+let _lidDecal = null;
+function lidDecalTexture() {
+  if (_lidDecal) return _lidDecal;
+  _lidDecal = canvasTex(1260, 850, (x, w, h) => {
+    x.clearRect(0, 0, w, h);
+    x.translate(w, h); x.rotate(Math.PI);                 // upside-down: hinge is at the top of the canvas
+    x.fillStyle = "#cfd2d8"; x.font = "bold 56px system-ui, sans-serif"; x.textBaseline = "alphabetic";
+    x.fillText("ThinkPad", 90, 130);
+    x.fillStyle = "#e11d2a"; x.beginPath(); x.arc(90 + 56 * 3.1, 130 - 56 * 0.78, 6.5, 0, 7); x.fill();   // the red dot over the i
+    x.fillStyle = "#aeb3bb"; x.font = "italic bold 46px system-ui, sans-serif";
+    x.fillText("lenovo", w - 270, 124);
+  }, null);
+  _lidDecal.wrapS = _lidDecal.wrapT = THREE.ClampToEdgeWrapping;
+  _lidDecal.userData = { shared: true };
+  return _lidDecal;
+}
+
 // A closed ThinkPad standing on its edge, after the real ones: matte black
 // grained plastic, a silver hinge strip and a battery barrel along the top,
 // a vented bottom case with a service door and stickers (+x), and the port
@@ -212,6 +231,7 @@ function buildLaptop(slot) {
   const grain = grainTexture();
   const matte = body(0x191a1d, { metalness: 0.05, roughness: 0.74, bumpMap: grain, bumpScale: 0.7 });
   const cover = body(0x1f2024, { metalness: 0.08, roughness: 0.58, bumpMap: grain, bumpScale: 0.45 });
+  const dark0 = body(0x050506);
   const bx = T / 2 - bottomT / 2, lx = -T / 2 + lidT / 2;
   const bottom = new THREE.Mesh(slabGeometry(L, H, bottomT, 0.07), matte);
   bottom.position.x = bx;
@@ -219,6 +239,18 @@ function buildLaptop(slot) {
   lid.position.x = lx - seam;
   group.add(bottom, lid);
   group.add(box(0.004, H - 0.05, L - 0.06, body(0x030304), (bx - bottomT / 2 + lx + lidT / 2) / 2, H / 2, 0));
+
+  // lid decals, after the photos: the ThinkPad wordmark with its red dot and
+  // the chrome lenovo badge sit near the far edge of the cover, so with the
+  // hinge up they read upside-down, as they do on a real standing laptop
+  const decal = new THREE.Mesh(new THREE.PlaneGeometry(L - 0.1, H - 0.1), body(0xffffff, { map: lidDecalTexture(), transparent: true, depthWrite: false, roughness: 0.5, metalness: 0.2 }));
+  decal.userData.decal = true;
+  decal.rotation.y = -Math.PI / 2;
+  decal.position.set(lx - seam - lidT / 2 - 0.0125, H / 2, 0);
+  group.add(decal);
+  // power jack (yellow slim tip) and the hot-air vent on the hinge edge
+  group.add(box(0.07, 0.03, 0.05, body(0xd9b200, { roughness: 0.5, metalness: 0.1 }), 0.0, H + 0.005, -0.655));
+  for (let i = 0; i < 4; i++) group.add(box(0.07, 0.006, 0.014, dark0, 0.0, H + 0.011, 0.585 + i * 0.022));
 
   // top edge: battery barrel, hinge strip and the silver hinge barrels
   const tube = (r, len, color, x, y, z, rough = 0.6, metal = 0.1) => {
