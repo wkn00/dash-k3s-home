@@ -907,11 +907,12 @@ function disposeTree(root) {
   });
 }
 
-// A name tag that also carries the node's pod summary: a health dot, the
-// name, and "N pods" (or NOT READY), redrawn only when one of those changes.
+// A name plate: a state-coloured edge, the node name large, the device model
+// beneath it, and a pod-count pill on the right. Redrawn only when one of
+// those changes.
 function makeTag(scale = 1) {
   const c = document.createElement("canvas");
-  c.width = 512; c.height = 128;
+  c.width = 1024; c.height = 256;
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
@@ -923,26 +924,45 @@ function makeTag(scale = 1) {
   return s;
 }
 
-function drawTag(tag, name, summary) {
-  const key = name + "|" + (summary ? summary.text + summary.state : "");
+function drawTag(tag, name, summary, sub) {
+  const key = name + "|" + (sub || "") + "|" + (summary ? summary.text + summary.state : "");
   if (tag.userData.key === key) return;
   tag.userData.key = key;
   const c = tag.userData.canvas, x = c.getContext("2d");
   x.clearRect(0, 0, c.width, c.height);
-  x.fillStyle = "rgba(10,16,24,0.82)";
-  x.beginPath(); x.roundRect(4, 4, 504, 120, 28); x.fill();
-  const dot = !summary ? "#64748b" : summary.state === "bad" ? "#ef4444" : summary.state === "warn" ? "#f59e0b" : "#22c55e";
-  x.fillStyle = dot;
-  x.beginPath(); x.arc(46, 64, 16, 0, Math.PI * 2); x.fill();
-  x.fillStyle = "#e6edf5";
-  x.font = "700 54px system-ui, sans-serif";
-  x.textAlign = "left"; x.textBaseline = "middle";
-  x.fillText(name, 78, 66, summary ? 200 : 420);
+  const accent = !summary ? "#64748b" : summary.state === "bad" ? "#ef4444" : summary.state === "warn" ? "#f59e0b" : "#22c55e";
+  // plate, with a thin lit rim
+  const plate = x.createLinearGradient(0, 8, 0, 248);
+  plate.addColorStop(0, "#1b2634"); plate.addColorStop(1, "#0d141d");
+  x.fillStyle = plate;
+  x.beginPath(); x.roundRect(8, 8, 1008, 240, 40); x.fill();
+  x.strokeStyle = "rgba(160,190,220,0.28)"; x.lineWidth = 3;
+  x.beginPath(); x.roundRect(9.5, 9.5, 1005, 237, 39); x.stroke();
+  // state edge
+  x.save();
+  x.beginPath(); x.roundRect(8, 8, 1008, 240, 40); x.clip();
+  x.fillStyle = accent; x.fillRect(8, 8, 26, 240);
+  x.restore();
+  x.textBaseline = "middle"; x.textAlign = "left";
+  const wide = summary ? 560 : 900;
+  x.fillStyle = "#f1f5fa";
+  x.font = "700 104px system-ui, sans-serif";
+  x.fillText(name, 76, sub ? 98 : 132, wide);
+  if (sub) {
+    x.fillStyle = "#8fa3b8";
+    x.font = "500 50px system-ui, sans-serif";
+    x.fillText(sub, 78, 188, wide);
+  }
   if (summary) {
-    x.fillStyle = summary.state === "bad" ? "#fca5a5" : "#9fb3c8";
-    x.font = "500 36px system-ui, sans-serif";
-    x.textAlign = "right";
-    x.fillText(summary.text, 490, 68, 200);
+    const pillW = 296, pillH = 112, px = 1016 - 44 - pillW, py = 128 - pillH / 2;
+    x.fillStyle = summary.state === "bad" ? "rgba(239,68,68,0.22)" : summary.state === "warn" ? "rgba(245,158,11,0.2)" : "rgba(34,197,94,0.16)";
+    x.beginPath(); x.roundRect(px, py, pillW, pillH, pillH / 2); x.fill();
+    x.fillStyle = accent;
+    x.beginPath(); x.arc(px + 44, 128, 14, 0, Math.PI * 2); x.fill();
+    x.fillStyle = summary.state === "bad" ? "#fecaca" : "#e6edf5";
+    x.font = "700 56px system-ui, sans-serif";
+    x.textAlign = "center";
+    x.fillText(summary.text, px + 44 + (pillW - 44) / 2 + 8, 131, pillW - 90);
   }
   tag.material.map.needsUpdate = true;
 }
@@ -1208,7 +1228,7 @@ export function mount(container, opts = {}) {
     const root = new THREE.Group();
     const e = {
       name, root, kind: null, model: null, cur: null, target: null,
-      podInfo: null, glow: null, tag: makeTag(0.47), cable: null, pulses: [],
+      podInfo: null, glow: null, tag: makeTag(0.6), cable: null, pulses: [],
       lift: 0, open: 0, reveal: 0, bob: Math.random() * 6, slot: null, curve: null, builtFor: null, cableDirty: false,
     };
     root.add(e.tag);
@@ -1343,7 +1363,7 @@ export function mount(container, opts = {}) {
     drawTag(e.tag, e.name, {
       text: down ? "DOWN" : e.podInfo.total + (e.podInfo.total === 1 ? " pod" : " pods"),
       state: down || unhealthy > 0 && unhealthy * 4 >= e.podInfo.total ? "bad" : unhealthy > 0 ? "warn" : "ok",
-    });
+    }, e.info && (e.info.displayName && e.info.displayName !== e.name ? e.info.displayName : e.info.deviceModel || e.info.deviceClass));
   }
 
   // A node with a problem (down, or running unhealthy pods) gets a pulsing
@@ -1646,7 +1666,7 @@ export function mount(container, opts = {}) {
     scene.background.copy(DAY_BG).lerp(bgNight, night);
     scene.fog.color.copy(scene.background);
     scene.fog.density = lerp(0.006, 0.014, night);
-    bloom.strength = lerp(0.01, 0.03, night);
+    bloom.strength = lerp(0.09, 0.2, night);
     bloom.threshold = lerp(0.97, 0.75, night);
 
     if (pendingOpen) {
@@ -1671,7 +1691,7 @@ export function mount(container, opts = {}) {
       if (e.model.setOpen) poseLaptop(e, t, dt);
       else e.model.group.position.y = e.lift;
 
-      if (e.glow) e.glow.material.opacity = motion ? 0.1 + 0.07 * Math.sin(t * 3.2) : 0.14;
+      if (e.glow) e.glow.material.opacity = motion ? 0.16 + 0.1 * Math.sin(t * 3.2) : 0.22;
       if (motion && e.curve) {
         const speed = 0.1 + (c.cpu == null ? 0 : c.cpu) * 0.6;
         for (const p of e.pulses) {
