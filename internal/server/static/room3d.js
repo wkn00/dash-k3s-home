@@ -20,7 +20,7 @@ import { Reflector } from "three/addons/objects/Reflector.js";
 import {
   modelFor, nodeIndicators, podsByNode, roomAlert, layoutRoom,
   PITCH, ROW_GAP, TRAY_MARGIN, SHELF_Y, SHELF_GAP, SHELF_Z, SHELF_PITCH, PER_SHELF,
-} from "./room3d-logic.js?v=13";
+} from "./room3d-logic.js?v=14";
 
 const YAW = 0;                // square to the wall
 const WALL_Z = -5.2;
@@ -325,20 +325,160 @@ function buildLaptop(slot) {
   };
 }
 
+// Lenovo ThinkCentre M720q Tiny (179 x 183 x 34.5 mm), drawn from photos:
+// a matte black slab with a honeycomb of vent holes across the top of the
+// front and down its right side, a smooth port panel on the lower left
+// (power button, mic and headphone jacks, USB-C, USB-A), a red Lenovo tab,
+// the "ThinkCentre" wordmark, a Lenovo logo on the lid and the full rear
+// port row. The front faces +z, towards the camera.
+function roundedSlab(W, D, H, r, bevel = 0.008) {
+  const w = W / 2, d = D / 2;
+  const sh = new THREE.Shape();
+  sh.moveTo(-w + r, -d); sh.lineTo(w - r, -d); sh.quadraticCurveTo(w, -d, w, -d + r);
+  sh.lineTo(w, d - r); sh.quadraticCurveTo(w, d, w - r, d); sh.lineTo(-w + r, d);
+  sh.quadraticCurveTo(-w, d, -w, d - r); sh.lineTo(-w, -d + r); sh.quadraticCurveTo(-w, -d, -w + r, -d);
+  const g = new THREE.ExtrudeGeometry(sh, {
+    depth: Math.max(0.001, H - 2 * bevel), bevelEnabled: true, bevelThickness: bevel,
+    bevelSize: bevel, bevelSegments: 2, curveSegments: 6,
+  });
+  g.rotateX(-Math.PI / 2);          // shape y -> -z, extrusion -> +y
+  g.computeBoundingBox();
+  g.translate(0, -g.boundingBox.min.y, 0);
+  return g;
+}
+
+let _m720Tex = null;
+function m720qTextures() {
+  if (_m720Tex) return _m720Tex;
+  const holes = (x, x0, x1, y0, y1, pitch, rad, skip) => {
+    let row = 0;
+    for (let y = y0; y < y1; y += pitch * 0.866, row++) {
+      for (let px = x0 + (row % 2 ? pitch / 2 : 0); px < x1; px += pitch) {
+        if (skip && skip(px, y)) continue;
+        x.beginPath(); x.arc(px, y, rad, 0, Math.PI * 2); x.fill();
+      }
+    }
+  };
+  // front face: 1600 x 304 (1.0 x 0.19)
+  const front = canvasTex(1600, 304, (x, w, h) => {
+    x.fillStyle = "#1a1b1e"; x.fillRect(0, 0, w, h);
+    x.fillStyle = "#050506";
+    const inPanel = (px, py) => px > 28 && px < 884 && py > 138;
+    holes(x, 20, w - 20, 22, h - 14, 24, 7.2, inPanel);
+    // the smooth port panel on the lower left
+    x.fillStyle = "#222327"; x.beginPath(); x.roundRect(26, 134, 862, 146, 10); x.fill();
+    x.strokeStyle = "#0d0e10"; x.lineWidth = 3; x.stroke();
+    // power button and its LED ring
+    x.fillStyle = "#0a0a0c"; x.beginPath(); x.arc(150, 214, 52, 0, 7); x.fill();
+    x.strokeStyle = "#3a3c42"; x.lineWidth = 4; x.stroke();
+    x.fillStyle = "#16171a"; x.beginPath(); x.arc(150, 214, 40, 0, 7); x.fill();
+    x.strokeStyle = "#8d9097"; x.lineWidth = 5; x.beginPath(); x.arc(150, 214, 15, -2.4, 0.9 + 2.4 - 0.4 + Math.PI * 0.35); x.stroke();
+    x.beginPath(); x.moveTo(150, 190); x.lineTo(150, 211); x.stroke();
+    // 3.5 mm jacks
+    for (const jx of [372, 484]) {
+      x.fillStyle = "#050506"; x.beginPath(); x.arc(jx, 224, 25, 0, 7); x.fill();
+      x.strokeStyle = "#7d8088"; x.lineWidth = 4; x.stroke();
+      x.fillStyle = "#34363b"; x.beginPath(); x.arc(jx, 224, 11, 0, 7); x.fill();
+    }
+    x.fillStyle = "#9a9da4"; x.font = "bold 26px system-ui"; x.fillText("🎤", 354, 176);
+    x.font = "bold 22px system-ui"; x.fillText("SS←", 568, 172); x.fillText("SS←", 744, 172);
+    // USB-C
+    x.fillStyle = "#050506"; x.beginPath(); x.roundRect(590, 202, 96, 40, 20); x.fill();
+    x.strokeStyle = "#7d8088"; x.lineWidth = 4; x.stroke();
+    x.fillStyle = "#2a2c31"; x.fillRect(610, 218, 56, 8);
+    // USB-A
+    x.fillStyle = "#c8cbd1"; x.fillRect(724, 196, 124, 52);
+    x.fillStyle = "#08090b"; x.fillRect(732, 204, 108, 36);
+    x.fillStyle = "#3b6fd8"; x.fillRect(740, 218, 92, 9);
+    // wordmark
+    x.fillStyle = "#f4f4f4"; x.font = "italic 700 74px system-ui, sans-serif";
+    x.fillText("ThinkCentre", 1180, 118);
+  });
+  front.anisotropy = 8;
+  // rear: 1600 x 304
+  const rear = canvasTex(1600, 304, (x, w, h) => {
+    x.fillStyle = "#1a1b1e"; x.fillRect(0, 0, w, h);
+    x.fillStyle = "#050506";
+    holes(x, 24, 640, 24, 130, 24, 7.2);               // exhaust grille, upper left
+    const port = (px, py, pw, ph, col, inner) => {
+      x.fillStyle = "#050506"; x.fillRect(px - 5, py - 5, pw + 10, ph + 10);
+      x.fillStyle = col; x.fillRect(px, py, pw, ph);
+      if (inner) { x.fillStyle = inner; x.fillRect(px + 8, py + ph * 0.42, pw - 16, ph * 0.22); }
+    };
+    port(70, 196, 92, 54, "#d6a700");                    // power barrel (slim tip)
+    port(228, 200, 120, 46, "#101114");                  // DisplayPort
+    port(410, 198, 96, 52, "#9aa0a8", "#050506");        // USB-A
+    port(566, 200, 120, 46, "#101114");                  // HDMI
+    port(748, 198, 96, 52, "#9aa0a8", "#050506");        // USB-A
+    port(900, 198, 96, 52, "#2a62d4", "#08090b");        // USB 3.1 Gen 2
+    port(1054, 198, 96, 52, "#2a62d4", "#08090b");
+    port(1240, 186, 100, 78, "#8c9199", "#050506");      // RJ45
+    x.fillStyle = "#d9dce2"; x.beginPath(); x.roundRect(1380, 40, 170, 80, 6); x.fill();
+    x.fillStyle = "#101114"; x.font = "bold 20px system-ui"; x.fillText("S/N", 1392, 72); // label
+  });
+  // lid: 1024 x 1024 (1.0 x 1.02) with the vertical Lenovo logo
+  const lid = canvasTex(1024, 1024, (x, w, h) => {
+    x.fillStyle = "#1c1d20"; x.fillRect(0, 0, w, h);
+    for (let i = 0; i < 9000; i++) {
+      const v = 26 + Math.random() * 22;
+      x.fillStyle = `rgb(${v},${v},${v + 2})`; x.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+    }
+    x.save(); x.translate(w * 0.86, h * 0.34); x.rotate(Math.PI / 2);
+    x.fillStyle = "#f4f4f4"; x.font = "italic 800 92px system-ui, sans-serif";
+    x.textAlign = "center"; x.fillText("lenovo", 0, 0);
+    x.restore();
+    // Intel Core sticker, top left
+    x.fillStyle = "#e7eaf0"; x.fillRect(64, 70, 150, 150);
+    x.fillStyle = "#1d5fb4"; x.fillRect(64, 70, 150, 54);
+    x.fillStyle = "#fff"; x.font = "bold 36px system-ui"; x.fillText("intel", 92, 112);
+    x.fillStyle = "#1d5fb4"; x.font = "bold 30px system-ui"; x.fillText("CORE i5", 78, 176);
+  });
+  for (const t of [front, rear, lid]) t.userData = { shared: true };
+  _m720Tex = { front, rear, lid };
+  return _m720Tex;
+}
+
 function buildMiniPc() {
   const group = new THREE.Group();
-  const shell = body(0x2b3340, { metalness: 0.6, roughness: 0.4 });
-  group.add(box(1.0, 0.28, 1.0, shell, 0, 0.14, 0));
-  group.add(box(1.02, 0.02, 1.02, body(0x151a22), 0, 0.29, 0));
-  const fan = makeFan(0.32);
-  fan.position.set(0, 0.3, 0);
-  group.add(fan);
-  const bars = makeBars(0.7);
-  bars.group.position.set(0, 0.14, 0.505);
-  group.add(bars.group);
-  const power = new THREE.Mesh(new THREE.CircleGeometry(0.025, 12), led(BAR_GOOD));
-  power.position.set(-0.4, 0.22, 0.506);
+  const W = 1.0, D = 1.02, H = 0.205, FOOT = 0.012;
+  const tex = m720qTextures();
+  const grain = grainTexture();
+  const shell = body(0x1b1c1f, { metalness: 0.15, roughness: 0.62, bumpMap: grain, bumpScale: 0.4 });
+  const chassis = new THREE.Mesh(roundedSlab(W, D, H - FOOT, 0.045), shell);
+  chassis.position.y = FOOT;
+  group.add(chassis);
+  // the seam between the lid and the chassis, as a shallow groove
+  group.add(box(W + 0.004, 0.006, D + 0.004, body(0x050506), 0, FOOT + (H - FOOT) * 0.70, 0));
+  for (const [fx, fz] of [[-0.4, -0.4], [0.4, -0.4], [-0.4, 0.4], [0.4, 0.4]]) {
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, FOOT, 14), body(0x0a0a0b, { roughness: 0.9, metalness: 0 }));
+    foot.position.set(fx, FOOT / 2, fz);
+    group.add(foot);
+  }
+  const faceH = H - FOOT - 0.03, faceY = FOOT + (H - FOOT) / 2 - 0.004;
+  const faceMat = (map) => body(0xffffff, { map, roughness: 0.7, metalness: 0.1 });
+  const front = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.03, faceH), faceMat(tex.front));
+  front.position.set(0, faceY, D / 2 + 0.0105);
+  const rear = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.03, faceH), faceMat(tex.rear));
+  rear.rotation.y = Math.PI; rear.position.set(0, faceY, -D / 2 - 0.0105);
+  const lid = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.02, D - 0.02), faceMat(tex.lid));
+  lid.rotation.x = -Math.PI / 2; lid.position.set(0, H + 0.0015, 0);
+  group.add(front, rear, lid);
+  // red Lenovo tab standing proud of the front, next to the port panel
+  const tab = box(0.034, 0.12, 0.014, body(0xd32323, { roughness: 0.45, metalness: 0.05 }), -0.5 + 0.585 * W, faceY - 0.005, D / 2 + 0.008);
+  group.add(tab);
+  // power button cap
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.0235, 0.0235, 0.012, 20), body(0x0e0f11, { roughness: 0.4, metalness: 0.3 }));
+  cap.rotation.x = Math.PI / 2; cap.position.set(-0.5 + 150 / 1600 * (W - 0.03) + 0.015, faceY + faceH * (0.5 - 214 / 304), D / 2 + 0.016);
+  group.add(cap);
+  const power = new THREE.Mesh(new THREE.CircleGeometry(0.006, 10), led(BAR_GOOD));
+  power.position.set(cap.position.x + 0.047, cap.position.y + 0.014, D / 2 + 0.0135);
   group.add(power);
+
+  // the usage bars glow along the front edge of the lid
+  const bars = makeBars(0.7);
+  bars.group.rotation.x = -Math.PI / 2;
+  bars.group.position.set(-0.08, H + 0.006, D / 2 - 0.17);
+  group.add(bars.group);
   const heat = makeHeat(1.2, 1.2);
   group.add(heat.mesh);
   return {
@@ -349,7 +489,6 @@ function buildMiniPc() {
       bars.set([ind.cpu, ind.mem, ind.disk], dead);
       power.material.color.copy(dead ? BAR_OFF : BAR_GOOD);
       heat.set(dead ? null : ind.tempC);
-      if (motion && !dead) fan.rotation.y += dt * (2 + (ind.cpu || 0) * 22);
     },
   };
 }
@@ -1320,6 +1459,20 @@ export function mount(container, opts = {}) {
   }
   function setDark(d) { nightTarget = d ? 1 : 0; }
 
+  // Park the camera on the home view turned by `azimuth` radians about the
+  // vertical, optionally raised or lowered. Used for stills and recordings,
+  // where the camera has to be somewhere exact rather than wherever a person
+  // dragged it.
+  function pose({ azimuth = 0, elevation = 0 } = {}) {
+    flyIn = null; anim = null; selected = null;
+    const off = home.pos.clone().sub(home.target);
+    const r = Math.hypot(off.x, off.z);
+    const a = Math.atan2(off.x, off.z) + azimuth;
+    camera.position.set(home.target.x + Math.sin(a) * r, home.pos.y + elevation, home.target.z + Math.cos(a) * r);
+    controls.target.copy(home.target);
+    controls.update();
+  }
+
   function dispose() {
     running = false;
     cancelAnimationFrame(raf);
@@ -1341,5 +1494,5 @@ export function mount(container, opts = {}) {
   resize();
   update({ nodes: [] });
   setRunning();
-  return { update, select, setVisible, setDark, dispose, get selected() { return selected; } };
+  return { update, select, setVisible, setDark, pose, dispose, get selected() { return selected; } };
 }

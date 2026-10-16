@@ -66,7 +66,7 @@ export function roomAlert(snapshot) {
 // Placement mirrors the physical setup: laptops stand on edge side by side in
 // one black tray (twelve to a row, extra rows behind), and anything that is
 // not laptop-shaped sits on the floor behind it. Deterministic and
-// independent of input order: control plane first, then by name.
+// independent of input order: by name, numbers in numeric order (wk, wk1, wk2, ...).
 export const PITCH = 0.7;        // distance between neighbouring laptops
 export const ROW_LENGTH = 12;    // laptops per tray row
 export const ROW_GAP = 4.4;      // distance between tray rows
@@ -85,10 +85,10 @@ export function inTray(deviceClass) {
 // Everything is mirrored about x = 0. Laptops stand in one centred tray;
 // anything not laptop-shaped sits on a wall shelf above it, centred, with
 // further shelves stacked upward. Deterministic and independent of input
-// order: control plane first, then by name.
+// order: by name, numbers in numeric order, left to right.
 export function layoutRoom(nodes) {
   const sorted = [...(nodes || [])].sort((a, b) =>
-    (b.controlPlane === true) - (a.controlPlane === true) || String(a.name).localeCompare(String(b.name)));
+    String(a.name).localeCompare(String(b.name), "en", { numeric: true }));
   const tray = sorted.filter(n => inTray(n.deviceClass));
   const bench = sorted.filter(n => !inTray(n.deviceClass));
   const perRow = Math.min(ROW_LENGTH, Math.max(1, tray.length));

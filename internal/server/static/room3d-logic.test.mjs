@@ -65,14 +65,14 @@ test("roomAlert", () => {
   assert.equal(roomAlert({ events: [{}] }), "warn");
 });
 
-test("layoutRoom is deterministic and order independent, control plane first", () => {
-  const nodes = [{ name: "wk3", deviceClass: "laptop" }, { name: "wk0", controlPlane: true, deviceClass: "laptop" },
-    { name: "wk1", deviceClass: "laptop" }, { name: "wk2" }];
+test("layoutRoom is deterministic and order independent, sorted wk, wk1, wk2 ...", () => {
+  const nodes = [{ name: "wk3", deviceClass: "laptop" }, { name: "wk10", deviceClass: "laptop" },
+    { name: "wk", controlPlane: true, deviceClass: "laptop" }, { name: "wk1", deviceClass: "laptop" }, { name: "wk2" }];
   const a = layoutRoom(nodes);
   const b = layoutRoom([...nodes].reverse());
   assert.deepEqual(a, b);
-  assert.equal(a.slots[0].name, "wk0");
-  assert.equal(a.trayCount, 4); // an unknown class is laptop-shaped by default
+  assert.deepEqual(a.slots.map(x => x.name), ["wk", "wk1", "wk2", "wk3", "wk10"]);
+  assert.equal(a.trayCount, 5); // an unknown class is laptop-shaped by default
   assert.equal(a.benchCount, 0);
 });
 
