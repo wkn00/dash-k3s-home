@@ -1017,9 +1017,9 @@ export function mount(container, opts = {}) {
   controls.rotateSpeed = 0.6;
 
   // Lighting: a window-style sun for the day, a cool lamp for the night.
-  const hemi = new THREE.HemisphereLight(0xdfe9f5, 0xb8a58f, 1.1);
+  const hemi = new THREE.HemisphereLight(0xdfe9f5, 0xb8a58f, 0.75);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff3e0, 2.6);
+  const sun = new THREE.DirectionalLight(0xfff3e0, 1.8);
   sun.position.set(-6, 11, 8);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -1695,13 +1695,13 @@ export function mount(container, opts = {}) {
     alertMix += ((alert !== "ok" ? 1 : 0) - alertMix) * Math.min(1, dt * 2);
     alertCol.lerp(ALERT_TINT[alert], Math.min(1, dt * 3));
     bgNight.lerp(NIGHT_BG[alert], Math.min(1, dt * 2));
-    sun.intensity = lerp(2.6, 0, night);
-    hemi.intensity = lerp(1.1, 0.55, night);
+    sun.intensity = lerp(1.8, 0, night);
+    hemi.intensity = lerp(0.75, 0.4, night);
     hemi.color.setHex(0xdfe9f5).lerp(tmpA.setHex(0x2a3f5c), night);
     hemi.groundColor.setHex(0xb8a58f).lerp(tmpA.setHex(0x0a0d12), night);
-    lamp.intensity = lerp(0, 250, night);
+    lamp.intensity = lerp(0, 150, night);
     alertLight.color.setHex(alert === "bad" ? 0xef4444 : 0xf59e0b);
-    alertLight.intensity = alertMix * lerp(6, 55, night) * (motion ? 0.85 + 0.15 * Math.sin(t * 4) : 1);
+    alertLight.intensity = alertMix * lerp(4, 35, night) * (motion ? 0.85 + 0.15 * Math.sin(t * 4) : 1);
     wallMat.color.copy(WALL_DAY).lerp(WALL_NIGHT, night).lerp(alertCol, 0.1 * alertMix * (1 - night));
     trimMat.color.setHex(0xe9ebee).lerp(WALL_NIGHT, night * 0.85);
     outletMat.color.setHex(0xf3f4f5).lerp(WALL_NIGHT, night * 0.85);
@@ -1709,8 +1709,8 @@ export function mount(container, opts = {}) {
     scene.background.copy(DAY_BG).lerp(bgNight, night);
     scene.fog.color.copy(scene.background);
     scene.fog.density = lerp(0.006, 0.014, night);
-    bloom.strength = lerp(0.22, 0.6, night);
-    bloom.threshold = lerp(0.97, 0.62, night);
+    bloom.strength = lerp(0.15, 0.35, night);
+    bloom.threshold = lerp(0.97, 0.75, night);
 
     if (pendingOpen) {
       const next = entries.get(pendingOpen);
