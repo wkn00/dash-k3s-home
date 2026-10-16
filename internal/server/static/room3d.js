@@ -1555,7 +1555,8 @@ export function mount(container, opts = {}) {
 
   function renderCard() {
     const e = selected ? entries.get(selected) : null;
-    if (!e || !e.target) { card.style.display = "none"; return; }
+    // an open laptop shows its stats on its own screen, so it gets no card
+    if (!e || !e.target || (e.model && e.model.setOpen)) { card.style.display = "none"; return; }
     const ind = e.target, n = e.info || {}, pi = e.podInfo || { total: 0, unhealthy: 0 };
     const head = css(document.createElement("div"), "display:flex;align-items:center;gap:8px;");
     const dotColor = !ind.ready ? "#ef4444" : pi.unhealthy ? "#f59e0b" : "#22c55e";
