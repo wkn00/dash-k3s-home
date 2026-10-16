@@ -976,7 +976,7 @@ export function mount(container, opts = {}) {
     "border:1px solid rgba(120,160,200,.35)";
   container.appendChild(label);
 
-  // ---- navigation overlay: prev / home / next, and a small info card
+  // ---- navigation overlay: prev / home / next
   const css = (n, text) => { n.style.cssText = text; return n; };
   const GLASS = "background:rgba(10,16,24,.82);border:1px solid rgba(140,170,200,.28);color:#e6edf5;backdrop-filter:blur(8px);";
   const navWrap = css(document.createElement("div"), "position:absolute;left:0;right:0;bottom:14px;display:flex;justify-content:center;pointer-events:none;z-index:3;");
@@ -996,9 +996,6 @@ export function mount(container, opts = {}) {
   pill.insertBefore(navStatus, pill.children[2]);
   navWrap.appendChild(pill);
   container.appendChild(navWrap);
-
-  const card = css(document.createElement("div"), "position:absolute;top:12px;right:12px;width:236px;display:none;padding:12px 14px;border-radius:12px;font:12px/1.45 system-ui,sans-serif;z-index:3;" + GLASS);
-  container.appendChild(card);
 
   const scene = new THREE.Scene();
   scene.background = DAY_BG.clone();
@@ -1441,7 +1438,6 @@ export function mount(container, opts = {}) {
     alert = roomAlert(snap);
     if (hovered) showLabel(hovered);
     if (selected && !entries.has(selected)) select(null, true);
-    renderCard();
     updateNavStatus();
   }
 
@@ -1504,8 +1500,7 @@ export function mount(container, opts = {}) {
     }
     if (e && e.model && e.model.glow) selGlow.scale.set(e.model.glow.w * 1.7, e.model.glow.d * 1.25, 1);
     else selGlow.scale.set(2.2, 2.2, 1);
-    selGlow.visible = !!e;
-    renderCard();
+    selGlow.visible = false;
     updateNavStatus();
     if (!silent && opts.onSelect) opts.onSelect(selected);
   }
@@ -1540,45 +1535,6 @@ export function mount(container, opts = {}) {
     if (!names.length) return;
     const i = selected ? names.indexOf(selected) : (dir > 0 ? -1 : 0);
     select(names[(i + dir + names.length) % names.length]);
-  }
-
-  const cardRow = (label, frac, text) => {
-    const row = css(document.createElement("div"), "display:grid;grid-template-columns:34px 1fr 38px;align-items:center;gap:8px;margin-top:5px;");
-    const l = css(document.createElement("span"), "color:#8fa3b8;"); l.textContent = label;
-    const track = css(document.createElement("span"), "height:6px;border-radius:3px;background:rgba(140,170,200,.18);overflow:hidden;display:block;");
-    const fill = css(document.createElement("span"), `display:block;height:100%;border-radius:3px;width:${frac == null ? 0 : Math.round(frac * 100)}%;background:${frac == null ? "transparent" : frac < 0.6 ? "#22c55e" : frac < 0.85 ? "#f59e0b" : "#ef4444"};`);
-    track.appendChild(fill);
-    const v = css(document.createElement("span"), "text-align:right;font-variant-numeric:tabular-nums;"); v.textContent = text;
-    row.append(l, track, v);
-    return row;
-  };
-
-  function renderCard() {
-    const e = selected ? entries.get(selected) : null;
-    // an open laptop shows its stats on its own screen, so it gets no card
-    if (!e || !e.target || (e.model && e.model.setOpen)) { card.style.display = "none"; return; }
-    const ind = e.target, n = e.info || {}, pi = e.podInfo || { total: 0, unhealthy: 0 };
-    const head = css(document.createElement("div"), "display:flex;align-items:center;gap:8px;");
-    const dotColor = !ind.ready ? "#ef4444" : pi.unhealthy ? "#f59e0b" : "#22c55e";
-    const dot = css(document.createElement("span"), `width:9px;height:9px;border-radius:50%;background:${dotColor};flex:none;`);
-    const title = css(document.createElement("strong"), "font-size:14px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;");
-    title.textContent = n.displayName || e.name;
-    const close = navBtn("\u00d7", "Close (Esc)", () => select(null));
-    close.style.width = close.style.height = "26px";
-    head.append(dot, title, close);
-    const sub = css(document.createElement("div"), "color:#8fa3b8;margin:2px 0 6px 17px;");
-    sub.textContent = [ind.ready ? "Ready" : "Not ready", n.deviceModel || n.deviceClass, n.internalIP].filter(Boolean).join(" · ");
-    const rows = [
-      cardRow("CPU", ind.cpu, pct(ind.cpu)), cardRow("Mem", ind.mem, pct(ind.mem)), cardRow("Disk", ind.disk, pct(ind.disk)),
-    ];
-    if (ind.battery != null) rows.push(cardRow("Batt", ind.battery, pct(ind.battery) + (ind.charging ? "\u26a1" : "")));
-    const foot = css(document.createElement("div"), "margin-top:9px;color:#b8c7d8;");
-    foot.textContent = `${ind.tempC == null ? "\u2014" : Math.round(ind.tempC) + "\u00b0C"} \u00b7 ${pi.total} pod${pi.total === 1 ? "" : "s"}${pi.unhealthy ? `, ${pi.unhealthy} unhealthy` : ""}`;
-    const more = css(document.createElement("button"), "all:unset;box-sizing:border-box;cursor:pointer;margin-top:10px;width:100%;text-align:center;padding:7px;border-radius:8px;background:rgba(56,189,248,.16);color:#7dd3fc;font-weight:600;");
-    more.type = "button"; more.textContent = "Open details";
-    more.addEventListener("click", () => { if (opts.onDetails) opts.onDetails(e.name); });
-    card.replaceChildren(head, sub, ...rows, foot, more);
-    card.style.display = "block";
   }
 
   // ---- input
@@ -1710,7 +1666,7 @@ export function mount(container, opts = {}) {
     scene.background.copy(DAY_BG).lerp(bgNight, night);
     scene.fog.color.copy(scene.background);
     scene.fog.density = lerp(0.006, 0.014, night);
-    bloom.strength = lerp(0.15, 0.35, night);
+    bloom.strength = lerp(0.05, 0.12, night);
     bloom.threshold = lerp(0.97, 0.75, night);
 
     if (pendingOpen) {
@@ -1735,7 +1691,7 @@ export function mount(container, opts = {}) {
       if (e.model.setOpen) poseLaptop(e, t, dt);
       else e.model.group.position.y = e.lift;
 
-      if (e.glow) e.glow.material.opacity = motion ? 0.28 + 0.22 * Math.sin(t * 3.2) : 0.4;
+      if (e.glow) e.glow.material.opacity = motion ? 0.1 + 0.07 * Math.sin(t * 3.2) : 0.14;
       if (motion && e.curve) {
         const speed = 0.1 + (c.cpu == null ? 0 : c.cpu) * 0.6;
         for (const p of e.pulses) {
@@ -1820,7 +1776,6 @@ export function mount(container, opts = {}) {
     canvas.remove();
     label.remove();
     navWrap.remove();
-    card.remove();
   }
 
   resize();
