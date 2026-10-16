@@ -20,7 +20,7 @@ import { Reflector } from "three/addons/objects/Reflector.js";
 import {
   modelFor, nodeIndicators, podsByNode, roomAlert, layoutRoom,
   PITCH, ROW_GAP, TRAY_MARGIN, SHELF_Y, SHELF_GAP, SHELF_Z, SHELF_PITCH, PER_SHELF,
-} from "./room3d-logic.js?v=16";
+} from "./room3d-logic.js?v=17";
 
 const YAW = 0;                // square to the wall
 const WALL_Z = -5.2;
@@ -29,6 +29,11 @@ const DEVICE_SCALE = 1.75;    // so are the other device models
 const LANE0 = 1.95;           // where the first cable lane runs in front of the tray
 const LANE_STEP = 0.06;
 const FLOOR_SCALE = 1.3;      // a mini PC on the tray's front apron
+const OPEN_Y = 2.35;          // a laptop opened for inspection hangs this high over the tray ...
+const OPEN_Z = 1.45;          // ... and this far forward
+const Q_ID = new THREE.Quaternion();
+// lie the standing laptop flat (lid up), hinge to the back, length across the room
+const Q_OPEN = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, Math.PI / 2, 0)).multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -Math.PI / 2)));
 const SW_SCALE = 1.4;         // the switch hangs high on the shelf, so it is drawn bigger
 
 const NIGHT_BG = {
@@ -202,6 +207,132 @@ function grainTexture() {
   return _grain;
 }
 
+const V3c = (x, y, z) => new THREE.Vector3(x, y, z);
+
+// A ThinkPad's deck seen from above: black keys with the red TrackPoint nub,
+// the trackpad and its buttons, the palm rest below them. 1024 x 700.
+let _kb = null;
+function keyboardTexture() {
+  if (_kb) return _kb;
+  _kb = canvasTex(1024, 700, (x, w, h) => {
+    x.fillStyle = "#25272c"; x.fillRect(0, 0, w, h);
+    const key = (kx, ky, kw, kh, c = "#0c0d10") => { x.fillStyle = c; x.beginPath(); x.roundRect(kx, ky, kw, kh, 5); x.fill(); };
+    // function row, then five rows of keys
+    for (let i = 0; i < 15; i++) key(66 + i * 60, 52, 52, 28, "#0d0e10");
+    const rows = [[14, 0], [14, 0.5], [13, 0.75], [12, 1.1], [9, 1.5]];
+    rows.forEach(([count, off], r) => {
+      for (let i = 0; i < count; i++) key(66 + (off + i) * 60 - (r === 4 ? 0 : 0), 100 + r * 62, 52, 54);
+    });
+    key(66 + 2.2 * 60, 100 + 4 * 62, 360, 54, "#08090b");                     // space bar
+    key(66 + 12.3 * 60, 100 + 3 * 62 + 4, 86, 54, "#1d2f55");                  // the blue Enter key
+    x.fillStyle = "#d32323"; x.beginPath(); x.arc(w / 2 - 36, 300, 9, 0, 7); x.fill();   // TrackPoint nub
+    // trackpad and buttons
+    x.fillStyle = "#101114"; x.beginPath(); x.roundRect(w / 2 - 150, 430, 300, 170, 10); x.fill();
+    x.fillStyle = "#08090b"; x.fillRect(w / 2 - 150, 612, 120, 22); x.fillRect(w / 2 + 30, 612, 120, 22);
+    x.fillStyle = "#d32323"; x.fillRect(w / 2 - 28, 612, 56, 22);
+    x.fillStyle = "#c9ccd2"; x.font = "bold 20px system-ui"; x.fillText("ThinkPad", w - 190, 660);
+  });
+  _kb.userData = { shared: true };
+  return _kb;
+}
+
+const ss = x => { const v = Math.min(1, Math.max(0, x)); return v * v * (3 - 2 * v); };
+function fmtUptime(sec) {
+  if (typeof sec !== "number" || !Number.isFinite(sec)) return null;
+  const d = Math.floor(sec / 86400), h = Math.floor(sec % 86400 / 3600), m = Math.floor(sec % 3600 / 60);
+  return d ? `${d}d ${h}h` : h ? `${h}h ${m}m` : `${m}m`;
+}
+
+// What a laptop shows on its own screen when it is opened: the node's vitals,
+// each block fading and sliding in a moment after the one before it, bars
+// filling as they appear. Unknown stays unknown: a null reading is a dash.
+function drawLaptopScreen(x, W, H, d) {
+  const n = d.info || {}, ind = d.ind || {}, r = d.r;
+  const bg = x.createLinearGradient(0, 0, 0, H);
+  bg.addColorStop(0, "#08131f"); bg.addColorStop(1, "#050a12");
+  x.globalAlpha = 1; x.fillStyle = bg; x.fillRect(0, 0, W, H);
+  x.strokeStyle = "rgba(120,170,220,.06)"; x.lineWidth = 1;
+  for (let gx = 0; gx < W; gx += 64) { x.beginPath(); x.moveTo(gx, 0); x.lineTo(gx, H); x.stroke(); }
+  for (let gy = 0; gy < H; gy += 64) { x.beginPath(); x.moveTo(0, gy); x.lineTo(W, gy); x.stroke(); }
+  const blockA = i => ss((r - i * 0.07) / 0.35);
+  const begin = i => { const a = blockA(i); x.save(); x.globalAlpha = a; x.translate(0, (1 - a) * 16); return a; };
+  const font = (px, w = 500) => { x.font = `${w} ${px}px system-ui, "Segoe UI", sans-serif`; };
+  const pct = v => (v == null ? "—" : Math.round(v * 100) + "%");
+  const col = v => (v == null ? "#4a5360" : v < 0.6 ? "#22c55e" : v < 0.85 ? "#f59e0b" : "#ef4444");
+  x.textBaseline = "alphabetic";
+
+  // header
+  begin(0);
+  const ok = ind.ready === true;
+  x.fillStyle = ok ? "#22c55e" : "#ef4444";
+  x.beginPath(); x.arc(58, 78, 13, 0, 7); x.fill();
+  x.fillStyle = "#e6edf5"; font(58, 700); x.textAlign = "left"; x.fillText(d.name || "", 88, 96);
+  x.textAlign = "right"; font(26, 700);
+  x.fillStyle = ok ? "#86efac" : "#fca5a5";
+  x.fillText(ok ? "READY" : "NOT READY", W - 48, 84);
+  x.textAlign = "left"; font(24, 500); x.fillStyle = "#7f93aa";
+  const model = [n.deviceVendor, n.deviceModel].filter(Boolean).join(" ") || (n.controlPlane ? "control plane" : "worker");
+  x.fillText(`${model}  ·  ${n.internalIP || ""}`, 48, 134);
+  x.restore();
+
+  // CPU / memory / disk
+  const rows = [["CPU", ind.cpu], ["MEM", ind.mem], ["DISK", ind.disk]];
+  rows.forEach(([label, v], i) => {
+    const a = begin(1 + i), y = 190 + i * 62;
+    x.fillStyle = "#7f93aa"; font(26, 600); x.textAlign = "left"; x.fillText(label, 48, y + 26);
+    x.fillStyle = "rgba(140,170,200,.16)"; x.beginPath(); x.roundRect(160, y, 640, 34, 17); x.fill();
+    if (v != null && ok) {
+      const w = Math.max(34, 640 * v * a);
+      x.fillStyle = col(v); x.beginPath(); x.roundRect(160, y, w, 34, 17); x.fill();
+    }
+    x.textAlign = "right"; x.fillStyle = "#e6edf5"; font(34, 700);
+    x.fillText(ok ? pct(v) : "—", W - 48, y + 29);
+    x.restore();
+  });
+
+  // tiles: temperature, battery, pods
+  const tiles = [
+    ["TEMP", ind.tempC == null || !ok ? "—" : Math.round(ind.tempC) + "°C", ind.tempC == null ? "#7f93aa" : ind.tempC < 60 ? "#86efac" : ind.tempC < 75 ? "#fcd34d" : "#fca5a5"],
+    ["BATTERY", ind.battery == null || !ok ? "—" : pct(ind.battery) + (ind.charging ? " ⚡" : ""), ind.battery == null ? "#7f93aa" : ind.charging ? "#7dd3fc" : col(1 - ind.battery)],
+    ["PODS", String((d.pods && d.pods.total) || 0), d.pods && d.pods.unhealthy ? "#fca5a5" : "#e6edf5"],
+  ];
+  tiles.forEach(([label, value, color], i) => {
+    begin(4 + i);
+    const tx = 48 + i * 316;
+    x.fillStyle = "rgba(140,170,200,.1)"; x.beginPath(); x.roundRect(tx, 388, 292, 108, 14); x.fill();
+    x.fillStyle = "#7f93aa"; font(22, 600); x.textAlign = "left"; x.fillText(label, tx + 20, 424);
+    x.fillStyle = color; font(48, 700); x.fillText(value, tx + 20, 476);
+    if (label === "PODS" && d.pods && d.pods.unhealthy) { x.fillStyle = "#fca5a5"; font(20, 600); x.textAlign = "right"; x.fillText(d.pods.unhealthy + " unhealthy", tx + 272, 424); }
+    x.restore();
+  });
+
+  // CPU trend
+  const series = n.series && n.series.cpuPercent;
+  begin(6);
+  x.fillStyle = "#7f93aa"; font(20, 600); x.textAlign = "left"; x.fillText("CPU, RECENT", 48, 534);
+  if (series && series.length > 1) {
+    const vals = series.map(v => (typeof v === "number" ? v : null));
+    const left = 48, top = 548, w = W - 96, h = 56;
+    x.beginPath();
+    let started = false;
+    vals.forEach((v, i) => {
+      if (v == null) return;
+      const px = left + w * i / (vals.length - 1), py = top + h - h * Math.min(100, Math.max(0, v)) / 100;
+      if (!started) { x.moveTo(px, py); started = true; } else x.lineTo(px, py);
+    });
+    x.strokeStyle = "#38bdf8"; x.lineWidth = 3; x.lineJoin = "round"; x.stroke();
+  } else { x.fillStyle = "#4a5360"; font(22, 500); x.fillText("no history yet", 48, 580); }
+  x.restore();
+
+  // footer
+  begin(7);
+  const up = fmtUptime(n.uptimeSeconds);
+  x.fillStyle = "#7f93aa"; font(22, 500); x.textAlign = "left";
+  x.fillText([up ? "up " + up : null, n.kubeletVersion, n.load1 != null ? "load " + n.load1.toFixed(2) : null].filter(Boolean).join("   ·   "), 48, 656);
+  x.restore();
+  x.globalAlpha = 1;
+}
+
 // Logos for the back of a ThinkPad lid (see buildLaptop): transparent, so the
 // grained cover shows through. 1 canvas pixel = 1/1000 of a model unit.
 let _lidDecal = null;
@@ -238,8 +369,13 @@ function buildLaptop(slot) {
   const bottom = new THREE.Mesh(slabGeometry(L, H, bottomT, 0.07), matte);
   bottom.position.x = bx;
   const lid = new THREE.Mesh(slabGeometry(L, H, lidT, 0.07), cover);
-  lid.position.x = lx - seam;
-  group.add(bottom, lid);
+  // the lid hangs from the hinge, so it can swing open about it
+  const pivot = new THREE.Vector3(-0.005, H - 0.004, 0);
+  const lidG = new THREE.Group();
+  lidG.position.copy(pivot);
+  lid.position.set(lx - seam - pivot.x, -pivot.y, 0);
+  lidG.add(lid);
+  group.add(bottom, lidG);
   group.add(box(0.004, H - 0.05, L - 0.06, body(0x030304), (bx - bottomT / 2 + lx + lidT / 2) / 2, H / 2, 0));
 
   // lid decals, after the photos: the ThinkPad wordmark with its red dot and
@@ -248,8 +384,32 @@ function buildLaptop(slot) {
   const decal = new THREE.Mesh(new THREE.PlaneGeometry(L - 0.1, H - 0.1), body(0xffffff, { map: lidDecalTexture(), transparent: true, depthWrite: false, roughness: 0.5, metalness: 0.2 }));
   decal.userData.decal = true;
   decal.rotation.y = -Math.PI / 2;
-  decal.position.set(lx - seam - lidT / 2 - 0.0125, H / 2, 0);
-  group.add(decal);
+  decal.position.set(lx - seam - lidT / 2 - 0.0015 - pivot.x, H / 2 - pivot.y, 0);
+  lidG.add(decal);
+  // the screen, on the lid's inner face: a dark bezel and a live canvas
+  const innerX = lx - seam + lidT / 2 - pivot.x;
+  const bezel = box(0.004, H - 0.1, L - 0.1, body(0x040506, { roughness: 0.5 }), innerX + 0.002, H / 2 - pivot.y, 0);
+  const SCR_W = 1024, SCR_H = 700;
+  const screenCanvas = document.createElement("canvas");
+  screenCanvas.width = SCR_W; screenCanvas.height = SCR_H;
+  const screenCtx = screenCanvas.getContext("2d");
+  const screenTex = new THREE.CanvasTexture(screenCanvas);
+  screenTex.colorSpace = THREE.SRGBColorSpace;
+  screenTex.anisotropy = 8;
+  const screenMat = new THREE.MeshBasicMaterial({ map: screenTex, toneMapped: false });
+  const screenMesh = new THREE.Mesh(new THREE.PlaneGeometry(L - 0.2, H - 0.2), screenMat);
+  // plane x -> along the laptop (+z), plane y -> toward the lid's free end (-y),
+  // plane normal -> out of the lid's inner face (+x)
+  screenMesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(V3c(0, 0, 1), V3c(0, -1, 0), V3c(1, 0, 0)));
+  screenMesh.position.set(innerX + 0.0045, H / 2 - pivot.y, 0);
+  screenMesh.userData.screenTex = screenTex;
+  lidG.add(bezel, screenMesh);
+  bezel.visible = screenMesh.visible = false;
+  // the keyboard deck, on the base's inner face: only seen once the lid is open
+  const deck = new THREE.Mesh(new THREE.PlaneGeometry(L - 0.08, H - 0.06), new THREE.MeshStandardMaterial({ map: keyboardTexture(), emissiveMap: keyboardTexture(), emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.75, metalness: 0.05, bumpMap: grain, bumpScale: 0.5 }));
+  deck.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(V3c(0, 0, 1), V3c(0, 1, 0), V3c(-1, 0, 0)));
+  deck.position.set((bx - bottomT / 2 + lx + lidT / 2) / 2 - 0.0025, H / 2, 0);   // just proud of the black gap filler
+  group.add(deck);
   // power jack (yellow slim tip) and the hot-air vent on the hinge edge
   group.add(box(0.07, 0.03, 0.05, body(0xd9b200, { roughness: 0.5, metalness: 0.1 }), 0.0, H + 0.005, -0.655));
   for (let i = 0; i < 4; i++) group.add(box(0.07, 0.006, 0.014, dark0, 0.0, H + 0.011, 0.585 + i * 0.022));
@@ -336,9 +496,25 @@ function buildLaptop(slot) {
 
   group.scale.setScalar(LAPTOP_SCALE);
   const ventCold = new THREE.Color(0x0a2a3a), ventWarm = new THREE.Color(0xfb923c).multiplyScalar(1.6), ventHot = new THREE.Color(0xef4444).multiplyScalar(2);
+  const OPEN_MAX = 1.85;                          // about 106 degrees
+  let lastDraw = -1;
   return {
     group,
-    jack: new THREE.Vector3(0, 0.63 * LAPTOP_SCALE, (portZ + 0.115) * LAPTOP_SCALE),
+    // `open` is 0 (shut, standing in the tray) .. 1 (open, lit); `reveal` 0..1
+    // fades the stats in once the lid is up. `d` carries what to show.
+    setOpen(open, reveal, t, d) {
+      lidG.rotation.z = -open * OPEN_MAX;
+      const on = open > 0.02;
+      bezel.visible = screenMesh.visible = on;
+      if (!on) return;
+      screenMat.color.setScalar(Math.min(1, reveal * 4 + 0.15));
+      if (t - lastDraw > 0.045 || reveal < 1 && reveal > 0) {
+        lastDraw = t;
+        drawLaptopScreen(screenCtx, SCR_W, SCR_H, { ...d, r: reveal, t });
+        screenTex.needsUpdate = true;
+      }
+    },
+    jack: new THREE.Vector3(0, 0.63, portZ + 0.115),       // the RJ45 plug, in the model's own units
     glow: { w: 0.95, d: 3.3 },
     update(ind, t, dt, motion) {
       const dead = !ind.ready;
@@ -517,6 +693,7 @@ function buildMiniPc() {
   group.add(heat.mesh);
   return {
     group,
+    jack: new THREE.Vector3(-0.297, faceY + faceH * (0.5 - 225 / 304), -D / 2 - 0.02),   // the rear RJ45
     update(ind, t, dt, motion) {
       const dead = !ind.ready;
       darken(group, dead);
@@ -943,13 +1120,18 @@ export function mount(container, opts = {}) {
     const n = layout.perRow;
     const half = n * PITCH / 2 + TRAY_MARGIN;
     const laneMax = LANE0 + LANE_STEP * Math.floor(n / 2);
-    const swW = Math.max(1.9, n * 0.2 + 0.8);
+    // one switch port per laptop, plus one for each floor device; floor
+    // devices take the outermost ports (alternating left, right) and a spare
+    // pads the other side so the laptops stay centred
+    const extra = 2 * Math.ceil((layout.floorCount || 0) / 2);
+    const ports = n + extra;
+    const swW = Math.max(1.9, ports * 0.2 + 0.8);
     // floor devices (a mini PC) stand in front of the cable lanes; with none
     // the tray just ends a little past the lanes
     const swZ = laneMax + 0.95;
     const front = layout.floorCount ? swZ + 0.85 : laneMax + 0.9;
     const back = -2.0 - (layout.rows - 1) * ROW_GAP;
-    Object.assign(geo, { half, laneMax, swZ, swW, front, back });
+    Object.assign(geo, { half, laneMax, swZ, swW, front, back, ports, extra });
     trayFront = front;
 
     const t = box(2 * half, 0.05, front - back, traySurface, 0, 0.025, (front + back) / 2);
@@ -978,9 +1160,9 @@ export function mount(container, opts = {}) {
     swGroup.position.set(0, SHELF_Y, SHELF_Z);
     swGroup.scale.setScalar(SW_SCALE);
     swGroup.add(box(swW, 0.24, 0.62, mat(0x1a1d22, { metalness: 0.5, roughness: 0.45 }), 0, 0.12, 0));
-    const pp = portPitch(n, swW);
-    for (let k = 0; k < n; k++) {
-      const x = (k - (n - 1) / 2) * pp;
+    const pp = portPitch(ports, swW);
+    for (let k = 0; k < ports; k++) {
+      const x = (k - (ports - 1) / 2) * pp;
       const m = led(BAR_GOOD);
       const l = new THREE.Mesh(new THREE.CircleGeometry(0.026, 10), m);
       l.position.set(x, 0.15, 0.312);
@@ -1004,13 +1186,15 @@ export function mount(container, opts = {}) {
     }
 
     // power strip and cords: centred behind the row, running up to the outlet
-    furniture.add(box(1.1, 0.1, 0.36, mat(0xeceef0, { metalness: 0, roughness: 0.5 }), 0, 0.1, back + 0.45));
+    // the strip lies on the floor behind the tray, clear of the cable runs
+    const stripZ = -3.3;
+    furniture.add(box(1.1, 0.1, 0.36, mat(0xeceef0, { metalness: 0, roughness: 0.5 }), 0, 0.05, stripZ));
     const cordMat = new THREE.MeshStandardMaterial({ color: 0xf1f2f3, roughness: 0.6 });
     for (const sgn of [-1, 1]) {
       const pts = [
-        new THREE.Vector3(sgn * 0.45, 0.1, back + 0.45),
-        new THREE.Vector3(sgn * 0.7, 0.06, back - 0.2),
-        new THREE.Vector3(sgn * 0.45, 0.07, back - 1.0),
+        new THREE.Vector3(sgn * 0.45, 0.1, stripZ),
+        new THREE.Vector3(sgn * 0.7, 0.06, stripZ - 0.6),
+        new THREE.Vector3(sgn * 0.45, 0.07, stripZ - 1.3),
         new THREE.Vector3(sgn * 0.16, 0.5, WALL_Z + 0.2 - tray.position.z),
         new THREE.Vector3(sgn * 0.1, 0.9, WALL_Z + 0.1 - tray.position.z),
       ];
@@ -1020,6 +1204,11 @@ export function mount(container, opts = {}) {
     swGroup.traverse(o => { if (o.isMesh) o.castShadow = true; });
   }
   function portPitch(n, swW) { return Math.min(0.24, (swW - 0.6) / Math.max(1, n - 1)); }
+  // where switch port k is, in room units (the switch hangs high on the shelf)
+  const switchPort = k => ({
+    x: (k - (geo.ports - 1) / 2) * portPitch(geo.ports, geo.swW) * SW_SCALE,
+    y: SHELF_Y + 0.075 * SW_SCALE, z: SHELF_Z + 0.32 * SW_SCALE,
+  });
 
   // ---- node entries
   function createEntry(name) {
@@ -1027,7 +1216,7 @@ export function mount(container, opts = {}) {
     const e = {
       name, root, kind: null, model: null, cur: null, target: null,
       podInfo: null, glow: null, tag: makeTag(0.47), cable: null, pulses: [],
-      lift: 0, bob: Math.random() * 6, slot: null, curve: null, builtFor: null, cableDirty: false,
+      lift: 0, open: 0, reveal: 0, bob: Math.random() * 6, slot: null, curve: null, builtFor: null, cableDirty: false,
     };
     root.add(e.tag);
     root.userData.entry = e;
@@ -1048,45 +1237,78 @@ export function mount(container, opts = {}) {
     return true;
   }
 
-  // One lane per cable, mirrored about the centre line so none cross. A
-  // cable leaves its jack, drops to its lane in front of the tray, runs
-  // toward the middle, then turns up to the back of the centred switch.
-  // Laptops further from the middle take outer lanes and outer ports, which
-  // is exactly what keeps the runs from crossing.
+  // The cables run on the ground. A laptop's cable drops from its plug to the
+  // tray, steps sideways to the gap on its inner side, runs back through that
+  // gap between the laptops, hops the tray's back rim and crosses the floor to
+  // the foot of the shelf, then climbs to its port on the switch. Outer
+  // laptops take outer ports and farther floor lanes, so nothing crosses. The
+  // floor device's cable goes round the outside of the row instead.
+  const _jp = new THREE.Vector3();
+  function jackPos(e, out) {
+    const g = e.model.group;
+    return out.copy(e.model.jack).multiplyScalar(g.scale.x).applyQuaternion(g.quaternion).add(g.position).add(e.root.position);
+  }
+  const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+  // the shared last leg: across the floor behind the tray, up the front of the
+  // shelf, into the port
+  function toSwitch(pts, xBack, port, zl) {
+    const d = Math.sign(port.x - xBack);
+    pts.push(V3(xBack, 0.04, zl + 0.1));
+    if (Math.abs(port.x - xBack) > 0.3) pts.push(V3(xBack + d * 0.12, 0.04, zl), V3(port.x - d * 0.12, 0.04, zl));
+    else pts.push(V3((xBack + port.x) / 2, 0.04, zl));
+    pts.push(V3(port.x, 0.04, zl - 0.1), V3(port.x, 0.5, zl - 0.14), V3(port.x, 1.6, zl - 0.14),
+      V3(port.x, SHELF_Y - 0.1, zl - 0.14), V3(port.x, port.y + 0.05, port.z + 0.55), V3(port.x, port.y, port.z));
+  }
+  function cablePoints(e, a = 0) {
+    const n = Math.max(1, layout.perRow), back = geo.back;
+    const jp = jackPos(e, _jp);
+    const pts = [];
+    if (e.slot.floor) {
+      const j = e.slot.index - layout.trayCount;
+      const left = j % 2 === 0, tier = Math.floor(j / 2);
+      const k = left ? geo.extra / 2 - 1 - tier : n + geo.extra / 2 + tier;
+      const port = switchPort(k);
+      const u = k - (geo.ports - 1) / 2;
+      const zl = back - 0.35 - 0.08 * Math.abs(u);
+      const side = left ? -1 : 1;
+      const xo = side * (geo.half - 0.45 + tier * 0.12);
+      const laneZ = geo.laneMax + 0.16;      // between the laptop lanes and the device's rear
+      pts.push(jp.clone(), V3(jp.x, 0.09, laneZ + 0.06), V3(jp.x + side * 0.2, 0.075, laneZ),
+        V3(xo - side * 0.12, 0.075, laneZ), V3(xo, 0.075, laneZ - 0.12),
+        V3(xo, 0.075, 1.0), V3(xo, 0.075, 0), V3(xo, 0.075, -1.0), V3(xo, 0.075, back + 0.45),
+        V3(xo, 0.125, back + 0.03), V3(xo, 0.04, back - 0.25));
+      toSwitch(pts, xo, port, zl);
+      return pts;
+    }
+    const col = e.slot.index % layout.perRow;
+    const mid = (n - 1) / 2;
+    const sideOf = c => (c < mid ? 1 : c > mid ? -1 : 1);       // toward the middle
+    const side = sideOf(col);
+    const shared = sideOf(col + side) === -side && col + side >= 0 && col + side < n;
+    const x = e.root.position.x, z0 = e.root.position.z;
+    const gx = x + side * PITCH / 2 + (shared ? -side * 0.09 : 0);
+    const k = col + geo.extra / 2;
+    const port = switchPort(k);
+    const u = k - (geo.ports - 1) / 2;
+    const laneZ = z0 + LANE0 + LANE_STEP * Math.abs(col - mid);
+    const r = 0.12;
+    const zl = back - 0.35 - 0.08 * Math.abs(u);
+    // while the laptop is lifted out for inspection its cable hangs from the plug
+    pts.push(jp.clone(), V3(jp.x + 0.2 * a, jp.y - 0.03 - 0.6 * a, jp.z + 0.1 + 0.3 * a),
+      V3(x, 0.22, laneZ - 0.16), V3(x, 0.09, laneZ - r * 0.45),
+      V3(x + side * r, 0.075, laneZ), V3(gx - side * r, 0.075, laneZ), V3(gx, 0.075, laneZ - r),
+      V3(gx, 0.075, z0 + 1.2), V3(gx, 0.075, z0), V3(gx, 0.075, z0 - 1.2),
+      V3(gx, 0.075, back + 0.45), V3(gx, 0.125, back + 0.03), V3(gx, 0.04, back - 0.25));
+    toSwitch(pts, gx, port, zl);
+    return pts;
+  }
   function buildCable(e) {
     if (e.cable) { tray.remove(e.cable); disposeTree(e.cable); }
     e.cable = null; e.curve = null; e.pulses = [];
     if (!e.model || !e.model.jack) return;
-    const n = Math.max(1, layout.perRow);
-    const col = e.slot.index % layout.perRow;
-    const u = col - (n - 1) / 2;                   // signed distance from the middle
-    const x = e.root.position.x, z0 = e.root.position.z;
-    const j = e.model.jack;
-    const y0 = 0.05 + j.y, zj = z0 + j.z;
-    const laneZ = z0 + LANE0 + LANE_STEP * Math.abs(u);
-    const portX = u * portPitch(n, geo.swW) * SW_SCALE;
-    const riseX = portX * 0.12;                    // all cables climb together, in a tight loom
-    const dir = Math.sign(riseX - x) || 1;         // toward the middle
-    const portY = SHELF_Y + 0.075 * SW_SCALE, portZ = SHELF_Z + 0.32 * SW_SCALE;
-    const r = 0.12;                                // corner rounding
-    const pts = [
-      new THREE.Vector3(x, y0, zj),
-      new THREE.Vector3(x, y0 - 0.03, zj + 0.1),
-      new THREE.Vector3(x, 0.22, laneZ - 0.16),
-      new THREE.Vector3(x, 0.09, laneZ - r * 0.45),
-      new THREE.Vector3(x + dir * r, 0.075, laneZ),
-      new THREE.Vector3(riseX - dir * r, 0.075, laneZ),
-      new THREE.Vector3(riseX, 0.16, laneZ - r * 0.6),
-      new THREE.Vector3(riseX, 1.5, laneZ - 0.3),
-      new THREE.Vector3(riseX, SHELF_Y - 0.3, laneZ - 1.1),
-      new THREE.Vector3(portX * 0.55 + riseX * 0.45, SHELF_Y - 0.15, (laneZ + portZ) / 2 - 0.6),
-      new THREE.Vector3(portX, portY - 0.1, portZ + 0.55),
-      new THREE.Vector3(portX, portY, portZ),
-    ];
-    if (Math.abs(riseX - x) < 2 * r) { pts.splice(4, 2, new THREE.Vector3((x + riseX) / 2, 0.075, laneZ)); }
-    e.curve = new THREE.CatmullRomCurve3(pts, false, "centripetal");
+    e.curve = new THREE.CatmullRomCurve3(cablePoints(e), false, "centripetal");
     const tube = new THREE.Mesh(
-      new THREE.TubeGeometry(e.curve, 110, 0.024, 8, false),
+      new THREE.TubeGeometry(e.curve, 260, 0.024, 8, false),
       new THREE.MeshStandardMaterial({ color: 0xf2f3f4, roughness: 0.5, metalness: 0 }));
     tube.castShadow = true;
     const g = new THREE.Group();
@@ -1100,6 +1322,14 @@ export function mount(container, opts = {}) {
     }
     e.cable = g;
     tray.add(g);
+  }
+  // re-shape the cable (same mesh) after its plug has moved
+  function reshapeCable(e, a) {
+    if (!e.cable) return;
+    e.curve = new THREE.CatmullRomCurve3(cablePoints(e, a), false, "centripetal");
+    const tube = e.cable.children[0];
+    tube.geometry.dispose();
+    tube.geometry = new THREE.TubeGeometry(e.curve, 260, 0.024, 8, false);
   }
 
   function removeEntry(e) {
@@ -1139,6 +1369,31 @@ export function mount(container, opts = {}) {
     } else if (!bad && e.glow) {
       e.root.remove(e.glow); disposeTree(e.glow); e.glow = null;
     }
+  }
+
+  // Selecting a laptop lifts it out of the tray, turns it to face the room,
+  // lays it flat and opens the lid; its screen then lights up with the node's
+  // stats. Deselecting plays it backwards. All of it is eased, none of it
+  // snaps, and the cable stays plugged in and follows the laptop.
+  function poseLaptop(e, t, dt) {
+    const want = e.name === selected;
+    const tgt = want ? 1 : 0;
+    const was = e.open;
+    if (!motion) e.open = tgt;
+    else e.open += Math.sign(tgt - e.open) * Math.min(Math.abs(tgt - e.open), dt / (want ? 1.7 : 1.1));
+    const o = e.open;
+    // the stats come up after the lid is up, and drop away as it starts to close
+    const rt = want && o > 0.97 ? 1 : 0;
+    if (!motion) e.reveal = rt;
+    else e.reveal += Math.sign(rt - e.reveal) * Math.min(Math.abs(rt - e.reveal), dt / (rt ? 1.5 : 0.35));
+    const g = e.model.group;
+    if (o <= 0 && was <= 0) { g.position.set(0, e.lift, 0); g.quaternion.identity(); return; }
+    const a = ss(o / 0.62), b = ss((o - 0.5) / 0.5);
+    const rise = ss(a / 0.55), turn = ss((a - 0.2) / 0.8), fwd = ss((a - 0.35) / 0.65);
+    g.position.set(0, e.lift * (1 - rise) + OPEN_Y * rise, OPEN_Z * fwd);
+    g.quaternion.slerpQuaternions(Q_ID, Q_OPEN, turn);
+    e.model.setOpen(b, e.reveal, t, { name: e.name, ind: e.cur, info: e.info, pods: e.podInfo });
+    if (o !== was || o < 1) reshapeCable(e, rise);
   }
 
   // ---- public: update
@@ -1219,7 +1474,13 @@ export function mount(container, opts = {}) {
       e.root.getWorldPosition(_w);
       const dir = new THREE.Vector3(Math.sin(YAW), 0, Math.cos(YAW));
       const far = e.slot && e.slot.bench ? 6.2 : 5.2;
-      glide(_w.clone().addScaledVector(dir, far).add(new THREE.Vector3(0, 1.8, 0)), _w.clone().add(new THREE.Vector3(0, 0.8, 0)));
+      if (e.model && e.model.setOpen) {
+        // a laptop opens up in the air above its slot: look at its screen
+        const tt = _w.clone().add(new THREE.Vector3(0, OPEN_Y + 0.9, OPEN_Z - 1.0));
+        glide(tt.clone().add(new THREE.Vector3(0, 1.0, 4.7)), tt);
+      } else {
+        glide(_w.clone().addScaledVector(dir, far).add(new THREE.Vector3(0, 1.8, 0)), _w.clone().add(new THREE.Vector3(0, 0.8, 0)));
+      }
     } else {
       glide(home.pos, home.target);
     }
@@ -1444,7 +1705,8 @@ export function mount(container, opts = {}) {
 
       const targetLift = e === hovered || e.name === selected ? 0.07 : 0;
       e.lift += (targetLift - e.lift) * k;
-      e.model.group.position.y = e.lift;
+      if (e.model.setOpen) poseLaptop(e, t, dt);
+      else e.model.group.position.y = e.lift;
 
       if (e.glow) e.glow.material.opacity = motion ? 0.28 + 0.22 * Math.sin(t * 3.2) : 0.4;
       if (motion && e.curve) {
