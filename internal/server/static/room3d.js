@@ -969,13 +969,6 @@ export function mount(container, opts = {}) {
   canvas.setAttribute("aria-label", "3D view of the cluster's nodes");
   container.appendChild(canvas);
 
-  const label = document.createElement("div");
-  label.className = "room3d-label";
-  label.style.cssText = "position:absolute;pointer-events:none;display:none;padding:6px 9px;border-radius:8px;" +
-    "background:rgba(8,14,22,.9);color:#e6edf5;font:12px/1.4 system-ui,sans-serif;white-space:pre;z-index:2;" +
-    "border:1px solid rgba(120,160,200,.35)";
-  container.appendChild(label);
-
   // ---- navigation overlay: prev / home / next
   const css = (n, text) => { n.style.cssText = text; return n; };
   const GLASS = "background:rgba(10,16,24,.82);border:1px solid rgba(140,170,200,.28);color:#e6edf5;backdrop-filter:blur(8px);";
@@ -1338,7 +1331,7 @@ export function mount(container, opts = {}) {
     if (e.cable) { tray.remove(e.cable); disposeTree(e.cable); }
     if (e.glow) { e.root.remove(e.glow); disposeTree(e.glow); }
     if (selected === e.name) select(null, true);
-    if (hovered === e) { hovered = null; label.style.display = "none"; }
+    if (hovered === e) hovered = null;
   }
 
   // Pods are summarised on the name tag and listed in the hover label; the
@@ -1436,7 +1429,6 @@ export function mount(container, opts = {}) {
       if (!seen.has(name)) { removeEntry(e); entries.delete(name); }
     }
     alert = roomAlert(snap);
-    if (hovered) showLabel(hovered);
     if (selected && !entries.has(selected)) select(null, true);
     updateNavStatus();
   }
@@ -1505,15 +1497,6 @@ export function mount(container, opts = {}) {
     if (!silent && opts.onSelect) opts.onSelect(selected);
   }
 
-  function showLabel(e) {
-    const ind = e.target || {};
-    const pi = e.podInfo || { total: 0, unhealthy: 0 };
-    label.textContent = `${e.name}${ind.ready === false ? "  · NOT READY" : ""}\n` +
-      `CPU ${pct(ind.cpu)}   MEM ${pct(ind.mem)}   DISK ${pct(ind.disk)}\n` +
-      `${pi.total} pods${pi.unhealthy ? `, ${pi.unhealthy} unhealthy` : ""}`;
-    label.style.display = "block";
-  }
-
   // A soft cyan glow under the selected device.
   const selGlow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({
     color: new THREE.Color(0x38bdf8).multiplyScalar(1.4), map: glowTexture(), transparent: true, opacity: 0.0,
@@ -1548,8 +1531,6 @@ export function mount(container, opts = {}) {
     const r = toNDC(ev);
     pointerMoved = true;
     pointerInside = true;
-    label.style.left = Math.min(ev.clientX - r.left + 14, r.width - 220) + "px";
-    label.style.top = Math.max(0, ev.clientY - r.top + 14) + "px";
   });
   canvas.addEventListener("pointerleave", () => { pointerInside = false; setHover(null); });
   canvas.addEventListener("pointerdown", ev => { downAt = { x: ev.clientX, y: ev.clientY }; idleSince = clock.elapsed; controls.autoRotate = false; });
@@ -1588,7 +1569,6 @@ export function mount(container, opts = {}) {
     if (e === hovered) return;
     hovered = e;
     canvas.style.cursor = e ? "pointer" : "";
-    if (e) showLabel(e); else label.style.display = "none";
   }
 
   // ---- size
@@ -1666,7 +1646,7 @@ export function mount(container, opts = {}) {
     scene.background.copy(DAY_BG).lerp(bgNight, night);
     scene.fog.color.copy(scene.background);
     scene.fog.density = lerp(0.006, 0.014, night);
-    bloom.strength = lerp(0.05, 0.12, night);
+    bloom.strength = lerp(0.01, 0.03, night);
     bloom.threshold = lerp(0.97, 0.75, night);
 
     if (pendingOpen) {
@@ -1774,7 +1754,6 @@ export function mount(container, opts = {}) {
     controls.dispose();
     renderer.dispose();
     canvas.remove();
-    label.remove();
     navWrap.remove();
   }
 
