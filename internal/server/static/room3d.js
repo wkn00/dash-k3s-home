@@ -20,7 +20,7 @@ import { Reflector } from "three/addons/objects/Reflector.js";
 import {
   modelFor, nodeIndicators, podsByNode, roomAlert, layoutRoom,
   PITCH, ROW_GAP, TRAY_MARGIN, SHELF_Y, SHELF_GAP, SHELF_Z, SHELF_PITCH, PER_SHELF,
-} from "./room3d-logic.js?v=17";
+} from "./room3d-logic.js?v=18";
 
 const YAW = 0;                // square to the wall
 const WALL_Z = -5.2;
@@ -1095,6 +1095,9 @@ export function mount(container, opts = {}) {
   let layoutKey = "";
   let alert = "ok";
   let selected = null;
+  // Which laptop is (or should be) open. Switching laptops is sequential: the
+  // open one closes first, then the next lifts out, so two never share the air.
+  let openTarget = null, pendingOpen = null;
   let hovered = null;
   const pointer = new THREE.Vector2();
   let pointerMoved = false;
@@ -1376,7 +1379,7 @@ export function mount(container, opts = {}) {
   // stats. Deselecting plays it backwards. All of it is eased, none of it
   // snaps, and the cable stays plugged in and follows the laptop.
   function poseLaptop(e, t, dt) {
-    const want = e.name === selected;
+    const want = e.name === openTarget;
     const tgt = want ? 1 : 0;
     const was = e.open;
     if (!motion) e.open = tgt;
@@ -1466,6 +1469,12 @@ export function mount(container, opts = {}) {
     anim = { fp: camera.position.clone(), ft: controls.target.clone(), tp: toPos.clone(), tt: toTarget.clone(), t0: performance.now() / 1000, dur };
   }
   const _w = new THREE.Vector3();
+  // a laptop opens up in the air above its slot: look at its screen
+  function glideToScreen(e) {
+    e.root.getWorldPosition(_w);
+    const tt = _w.clone().add(new THREE.Vector3(0, OPEN_Y + 0.9, OPEN_Z - 1.0));
+    glide(tt.clone().add(new THREE.Vector3(0, 1.0, 4.7)), tt, 1.5);
+  }
   function select(name, silent) {
     const e = name ? entries.get(name) : null;
     selected = e ? e.name : null;
@@ -1475,13 +1484,22 @@ export function mount(container, opts = {}) {
       const dir = new THREE.Vector3(Math.sin(YAW), 0, Math.cos(YAW));
       const far = e.slot && e.slot.bench ? 6.2 : 5.2;
       if (e.model && e.model.setOpen) {
-        // a laptop opens up in the air above its slot: look at its screen
-        const tt = _w.clone().add(new THREE.Vector3(0, OPEN_Y + 0.9, OPEN_Z - 1.0));
-        glide(tt.clone().add(new THREE.Vector3(0, 1.0, 4.7)), tt);
+        const busy = [...entries.values()].some(x => x !== e && x.open > 0.02);
+        if (busy) {
+          // wait for the open laptop to shut: close it now, line the camera
+          // up on this laptop's slot, and open it once the air is clear
+          openTarget = null; pendingOpen = e.name;
+          glide(_w.clone().addScaledVector(dir, far).add(new THREE.Vector3(0, 1.8, 0)), _w.clone().add(new THREE.Vector3(0, 0.8, 0)), 1.0);
+        } else {
+          openTarget = e.name; pendingOpen = null;
+          glideToScreen(e);
+        }
       } else {
+        openTarget = null; pendingOpen = null;
         glide(_w.clone().addScaledVector(dir, far).add(new THREE.Vector3(0, 1.8, 0)), _w.clone().add(new THREE.Vector3(0, 0.8, 0)));
       }
     } else {
+      openTarget = null; pendingOpen = null;
       glide(home.pos, home.target);
     }
     if (e && e.model && e.model.glow) selGlow.scale.set(e.model.glow.w * 1.7, e.model.glow.d * 1.25, 1);
@@ -1694,6 +1712,14 @@ export function mount(container, opts = {}) {
     bloom.strength = lerp(0.22, 0.6, night);
     bloom.threshold = lerp(0.97, 0.62, night);
 
+    if (pendingOpen) {
+      const next = entries.get(pendingOpen);
+      if (!next || selected !== pendingOpen) pendingOpen = null;
+      else if (![...entries.values()].some(x => x !== next && x.open > 0.02)) {
+        openTarget = pendingOpen; pendingOpen = null;
+        glideToScreen(next);
+      }
+    }
     const k = Math.min(1, dt * 3);
     for (const e of entries.values()) {
       const c = e.cur, tg = e.target;
@@ -1769,6 +1795,7 @@ export function mount(container, opts = {}) {
   // dragged it.
   function pose({ azimuth = 0, elevation = 0 } = {}) {
     flyIn = null; anim = null; selected = null;
+    openTarget = null; pendingOpen = null;
     const off = home.pos.clone().sub(home.target);
     const r = Math.hypot(off.x, off.z);
     const a = Math.atan2(off.x, off.z) + azimuth;
