@@ -1228,7 +1228,7 @@ export function mount(container, opts = {}) {
     const root = new THREE.Group();
     const e = {
       name, root, kind: null, model: null, cur: null, target: null,
-      podInfo: null, glow: null, tag: makeTag(0.6), cable: null, pulses: [],
+      podInfo: null, glow: null, tag: makeTag(0.52), cable: null, pulses: [],
       lift: 0, open: 0, reveal: 0, bob: Math.random() * 6, slot: null, curve: null, builtFor: null, cableDirty: false,
     };
     root.add(e.tag);
@@ -1433,7 +1433,7 @@ export function mount(container, opts = {}) {
       e.root.position.set(slot.x, slot.y, slot.floor ? geo.swZ : slot.z);
       // name plate lying on the tray's front rim (or the floor in front of a
       // bench device), tilted back toward the viewer
-      e.tag.rotation.x = -1.05;
+      e.tag.rotation.x = -0.7;
       e.tag.position.set(0, slot.bench ? -0.035 : -0.035, (slot.bench ? 1.15 : trayFront - e.root.position.z + (slot.floor ? 0.62 : 0.22)));
       if (isNew || rebuilt || e.cableDirty || oldIndex !== slot.index || oldX !== slot.x || oldZ !== e.root.position.z) {
         buildCable(e);
