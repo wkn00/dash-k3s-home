@@ -20,7 +20,7 @@ import { Reflector } from "three/addons/objects/Reflector.js";
 import {
   modelFor, nodeIndicators, podsByNode, roomAlert, layoutRoom,
   PITCH, ROW_GAP, TRAY_MARGIN, SHELF_Y, SHELF_GAP, SHELF_Z, SHELF_PITCH, PER_SHELF,
-} from "./room3d-logic.js?v=15";
+} from "./room3d-logic.js?v=16";
 
 const YAW = 0;                // square to the wall
 const WALL_Z = -5.2;
@@ -28,6 +28,8 @@ const LAPTOP_SCALE = 2.0;     // laptops are drawn big enough to read from acros
 const DEVICE_SCALE = 1.75;    // so are the other device models
 const LANE0 = 1.95;           // where the first cable lane runs in front of the tray
 const LANE_STEP = 0.06;
+const FLOOR_SCALE = 1.3;      // a mini PC on the tray's front apron
+const SW_SCALE = 1.4;         // the switch hangs high on the shelf, so it is drawn bigger
 
 const NIGHT_BG = {
   ok: new THREE.Color(0x0b1622),
@@ -942,8 +944,10 @@ export function mount(container, opts = {}) {
     const half = n * PITCH / 2 + TRAY_MARGIN;
     const laneMax = LANE0 + LANE_STEP * Math.floor(n / 2);
     const swW = Math.max(1.9, n * 0.2 + 0.8);
-    const swZ = laneMax + 0.62;
-    const front = swZ + 0.62;
+    // floor devices (a mini PC) stand in front of the cable lanes; with none
+    // the tray just ends a little past the lanes
+    const swZ = laneMax + 0.95;
+    const front = layout.floorCount ? swZ + 0.85 : laneMax + 0.9;
     const back = -2.0 - (layout.rows - 1) * ROW_GAP;
     Object.assign(geo, { half, laneMax, swZ, swW, front, back });
     trayFront = front;
@@ -969,9 +973,10 @@ export function mount(container, opts = {}) {
       }
     }
 
-    // the switch, centred in front of the row: status LEDs face the viewer,
-    // the cables plug in at the back
-    swGroup.position.set(0, 0.05, swZ);
+    // the switch, centred on the lowest wall shelf: status LEDs and ports face
+    // the viewer, the laptop cables climb up to it
+    swGroup.position.set(0, SHELF_Y, SHELF_Z);
+    swGroup.scale.setScalar(SW_SCALE);
     swGroup.add(box(swW, 0.24, 0.62, mat(0x1a1d22, { metalness: 0.5, roughness: 0.45 }), 0, 0.12, 0));
     const pp = portPitch(n, swW);
     for (let k = 0; k < n; k++) {
@@ -987,9 +992,9 @@ export function mount(container, opts = {}) {
     // wall shelves for the devices that are not laptop-shaped: one plank per
     // shelf, centred, on two brackets each
     const plank = mat(0x2a2d33, { metalness: 0.2, roughness: 0.55 });
-    for (let sh = 0; sh < (layout.shelves || 0); sh++) {
-      const inShelf = Math.min(PER_SHELF, layout.benchCount - sh * PER_SHELF);
-      const w = (inShelf - 1) * SHELF_PITCH + 4.0;
+    for (let sh = 0; sh < Math.max(1, layout.shelves || 0); sh++) {
+      const inShelf = sh === 0 ? 0 : Math.min(PER_SHELF, layout.benchCount - (sh - 1) * PER_SHELF);
+      const w = Math.max((inShelf - 1) * SHELF_PITCH + 4.0, sh === 0 ? swW * SW_SCALE + 1.4 : 0);
       const y = SHELF_Y + sh * SHELF_GAP;
       furniture.add(box(w, 0.1, 2.1, plank, 0, y - 0.05, SHELF_Z));
       for (const sx of [-1, 1]) {
@@ -1037,7 +1042,7 @@ export function mount(container, opts = {}) {
     e.kind = kind;
     e.builtFor = idx;
     e.model = BUILDERS[kind](e.slot);
-    if (kind !== "laptop" && kind !== "generic") e.model.group.scale.setScalar(DEVICE_SCALE);
+    if (kind !== "laptop" && kind !== "generic") e.model.group.scale.setScalar(kind === "minipc" ? FLOOR_SCALE : DEVICE_SCALE);
     e.model.group.traverse(o => { o.userData.entry = e; if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     e.root.add(e.model.group);
     return true;
@@ -1059,9 +1064,10 @@ export function mount(container, opts = {}) {
     const j = e.model.jack;
     const y0 = 0.05 + j.y, zj = z0 + j.z;
     const laneZ = z0 + LANE0 + LANE_STEP * Math.abs(u);
-    const portX = u * portPitch(n, geo.swW);
-    const swBack = geo.swZ - 0.31 - z0;
-    const dir = Math.sign(portX - x) || 1;         // toward the middle
+    const portX = u * portPitch(n, geo.swW) * SW_SCALE;
+    const riseX = portX * 0.12;                    // all cables climb together, in a tight loom
+    const dir = Math.sign(riseX - x) || 1;         // toward the middle
+    const portY = SHELF_Y + 0.075 * SW_SCALE, portZ = SHELF_Z + 0.32 * SW_SCALE;
     const r = 0.12;                                // corner rounding
     const pts = [
       new THREE.Vector3(x, y0, zj),
@@ -1069,12 +1075,15 @@ export function mount(container, opts = {}) {
       new THREE.Vector3(x, 0.22, laneZ - 0.16),
       new THREE.Vector3(x, 0.09, laneZ - r * 0.45),
       new THREE.Vector3(x + dir * r, 0.075, laneZ),
-      new THREE.Vector3(portX - dir * r, 0.075, laneZ),
-      new THREE.Vector3(portX, 0.085, laneZ + r),
-      new THREE.Vector3(portX, 0.14, swBack - 0.1),
-      new THREE.Vector3(portX, 0.16, swBack),
+      new THREE.Vector3(riseX - dir * r, 0.075, laneZ),
+      new THREE.Vector3(riseX, 0.16, laneZ - r * 0.6),
+      new THREE.Vector3(riseX, 1.5, laneZ - 0.3),
+      new THREE.Vector3(riseX, SHELF_Y - 0.3, laneZ - 1.1),
+      new THREE.Vector3(portX * 0.55 + riseX * 0.45, SHELF_Y - 0.15, (laneZ + portZ) / 2 - 0.6),
+      new THREE.Vector3(portX, portY - 0.1, portZ + 0.55),
+      new THREE.Vector3(portX, portY, portZ),
     ];
-    if (Math.abs(portX - x) < 2 * r) { pts.splice(4, 2, new THREE.Vector3((x + portX) / 2, 0.075, laneZ)); }
+    if (Math.abs(riseX - x) < 2 * r) { pts.splice(4, 2, new THREE.Vector3((x + riseX) / 2, 0.075, laneZ)); }
     e.curve = new THREE.CatmullRomCurve3(pts, false, "centripetal");
     const tube = new THREE.Mesh(
       new THREE.TubeGeometry(e.curve, 110, 0.024, 8, false),
@@ -1137,7 +1146,7 @@ export function mount(container, opts = {}) {
     const nodes = (snap && snap.nodes) || [];
     layout = layoutRoom(nodes);
     const byName = new Map(nodes.map(n => [n.name, n]));
-    const key = `${layout.trayCount}:${layout.benchCount}:${layout.perRow}:${layout.rows}:${layout.shelves}`;
+    const key = `${layout.trayCount}:${layout.floorCount}:${layout.benchCount}:${layout.perRow}:${layout.rows}:${layout.shelves}`;
     if (key !== layoutKey) { layoutKey = key; buildFurniture(); for (const e of entries.values()) e.cableDirty = true; frameCamera(); }
     emptyTag.visible = nodes.length === 0;
 
@@ -1153,12 +1162,12 @@ export function mount(container, opts = {}) {
       const oldX = e.root.position.x, oldZ = e.root.position.z;
       e.slot = slot;
       const rebuilt = setKind(e, modelFor(n.deviceClass));
-      e.root.position.set(slot.x, slot.y, slot.z);
+      e.root.position.set(slot.x, slot.y, slot.floor ? geo.swZ : slot.z);
       // name plate lying on the tray's front rim (or the floor in front of a
       // bench device), tilted back toward the viewer
       e.tag.rotation.x = -1.05;
-      e.tag.position.set(0, slot.bench ? -0.035 : -0.035, (slot.bench ? 1.15 : trayFront - slot.z + 0.22));
-      if (isNew || rebuilt || e.cableDirty || oldIndex !== slot.index || oldX !== slot.x || oldZ !== slot.z) {
+      e.tag.position.set(0, slot.bench ? -0.035 : -0.035, (slot.bench ? 1.15 : trayFront - e.root.position.z + (slot.floor ? 0.62 : 0.22)));
+      if (isNew || rebuilt || e.cableDirty || oldIndex !== slot.index || oldX !== slot.x || oldZ !== e.root.position.z) {
         buildCable(e);
         e.cableDirty = false;
       }
@@ -1189,8 +1198,9 @@ export function mount(container, opts = {}) {
     const halfW = Math.max(layout.reach || 0, layout.half || 3) + 0.4;
     const depth = (layout.rows - 1) * ROW_GAP;
     const top = layout.shelves ? SHELF_Y + (layout.shelves - 1) * SHELF_GAP + 1.6 : 2.2;
-    const d = Math.max(8.4, halfW * 1.15 + 2.2 + depth * 0.4, top * 1.75);
-    home.target.set(0, Math.max(0.8, top * 0.38), 0.95 - depth * 0.3);
+    const apron = layout.floorCount ? 0.9 : 0;      // the floor device sticks out in front of the lanes
+    const d = Math.max(8.4, halfW * 1.15 + 2.2 + depth * 0.4, top * 1.75) + apron;
+    home.target.set(0, Math.max(0.8, top * 0.38), 0.95 - depth * 0.3 + apron * 0.5);
     home.pos.set(0, 1.5 + d * 0.36, home.target.z + d * 0.92);
     controls.maxDistance = Math.max(14, d * 1.9);
     if (!flyIn && !anim && !selected) { camera.position.copy(home.pos); controls.target.copy(home.target); }

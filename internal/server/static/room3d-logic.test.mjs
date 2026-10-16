@@ -108,9 +108,23 @@ test("layoutRoom: a single shelf device sits dead centre; a sixth starts a secon
   const one = layoutRoom([{ name: "x", deviceClass: "server" }]);
   assert.equal(one.slots[0].x, 0);
   const six = layoutRoom(Array.from({ length: 6 }, (_, i) => ({ name: "d" + i, deviceClass: "server" })));
-  assert.equal(six.shelves, 2);
+  assert.equal(six.shelves, 3);   // shelf 0 is the switch's
   assert.ok(six.slots[5].y > six.slots[0].y);
   assert.equal(six.slots[5].x, 0);
+});
+
+test("layoutRoom stands mini PCs on the floor in front of the tray, centred, and leaves the shelf to the switch", () => {
+  const r = layoutRoom([{ name: "wk", deviceClass: "laptop" }, { name: "wk1", deviceClass: "laptop" }, { name: "wk0", deviceClass: "mini-pc" }]);
+  const pc = r.slots.find(s => s.name === "wk0");
+  assert.equal(pc.floor, true);
+  assert.equal(pc.bench, false);
+  assert.equal(pc.x, 0);
+  assert.equal(r.floorCount, 1);
+  assert.equal(r.trayCount, 2);
+  assert.equal(r.benchCount, 0);
+  assert.equal(r.shelves, 1);
+  const two = layoutRoom([{ name: "a", deviceClass: "desktop" }, { name: "b", deviceClass: "desktop" }]);
+  assert.ok(Math.abs(two.slots[0].x + two.slots[1].x) < 1e-9);
 });
 
 test("layoutRoom with no nodes", () => {
